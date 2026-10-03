@@ -1,0 +1,14 @@
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Host=localhost;Port=5434;Database=ezmatch;Username=ezmatch;Password=ezmatch_dev"
+  },
+  "Serilog": {
+    "MinimumLevel": {
+      "Default": "Debug",
+      "Override": {
+        "Microsoft.AspNetCore": "Information",
+        "Microsoft.EntityFrameworkCore": "Warning"
+      }
+    }
+  }
+}

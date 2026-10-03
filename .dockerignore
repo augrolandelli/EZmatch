@@ -1,0 +1,29 @@
+.git
+.gitignore
+*.md
+
+# Frontend y workflows (no se incluyen en la imagen del backend).
+frontend/
+n8n/
+
+# Backend
+backend/EZmatchApi/bin/
+backend/EZmatchApi/obj/
+backend/EZmatchApi/publish/
+backend/EZmatchApi.Tests/
+
+# Configuración local y secretos
+*.env
+.env.*
+!.env.example
+appsettings.Development.json
+.mcp.json
+
+# IDEs
+.vs/
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+.DS_Store

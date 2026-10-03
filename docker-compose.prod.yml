@@ -1,0 +1,43 @@
+# Docker Compose de producción para Easy Panel / VPS.
+# Uso local (con variables en .env):
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# En Easy Panel podés subir este archivo y dejar que el panel levante ambos servicios.
+# Nota: Easy Panel gestiona sus propias redes y nombres de contenedor, por eso no se
+# definen explícitamente aquí.
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    expose:
+      - "5000"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:5000
+      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=ezmatch;Username=ezmatch;Password=${POSTGRES_PASSWORD}"
+      Cors__AllowedOrigins__0: ${FRONTEND_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ezmatch
+      POSTGRES_USER: ezmatch
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: pg_isready -U ezmatch -d ezmatch
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+
+volumes:
+  postgres-data:

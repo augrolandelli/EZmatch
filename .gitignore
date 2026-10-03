@@ -1,0 +1,29 @@
+# ---- .NET ----
+bin/
+obj/
+out/
+*.user
+*.suo
+.vs/
+
+# ---- Node / Vite ----
+node_modules/
+dist/
+dist-ssr/
+*.local
+test-results/
+playwright-report/
+
+# ---- Entorno / secretos ----
+.env
+.env.*
+!.env.example
+**/secrets.json
+**/appsettings.Development.json
+**/appsettings.Production.json
+.mcp.json
+
+# ---- Sistema ----
+.DS_Store
+Thumbs.db
+~$*

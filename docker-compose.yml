@@ -1,0 +1,23 @@
+# PostgreSQL para desarrollo local de EZmatchApi.
+# Uso: docker compose up -d
+# Puerto 5434 en el host para no chocar con otros Postgres locales (5432 nativo, 5433 otro proyecto).
+# La cadena de conexión ya está en backend/EZmatchApi/appsettings.Development.json
+services:
+  postgres:
+    image: postgres:17
+    container_name: ezmatch-postgres
+    environment:
+      POSTGRES_DB: ezmatch
+      POSTGRES_USER: ezmatch
+      POSTGRES_PASSWORD: ezmatch_dev # solo dev local, nunca reutilizar en prod
+    ports:
+      - "5434:5432"
+    volumes:
+      - ezmatch-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: pg_isready -U ezmatch -d ezmatch
+      interval: 5s
+      retries: 10
+
+volumes:
+  ezmatch-postgres-data:
