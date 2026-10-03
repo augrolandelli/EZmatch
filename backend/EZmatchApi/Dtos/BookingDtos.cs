@@ -31,3 +31,6 @@ public record BookingDto(
     BookingSource Source,
     string CustomerName,
     string CustomerPhone);
+
+/// <summary>Detalle de un 409/400 de reserva: turnos libres más cercanos al pedido.</summary>
+public record BookingAlternatives(IReadOnlyList<AvailableSlotDto> Alternatives);

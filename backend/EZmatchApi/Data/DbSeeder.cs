@@ -6,19 +6,34 @@ using Microsoft.EntityFrameworkCore;
 namespace EZmatchApi.Data;
 
 /// <summary>
-/// Datos de desarrollo: club "Pádel Demo" con 3 canchas de pádel y 1 de fútbol 5,
-/// y algunas reservas de hoy y mañana. Solo corre en Development y si no hay clubes.
+/// Club "Pádel Demo" con 3 canchas de pádel y 1 de fútbol 5, y algunas reservas de hoy y mañana.
+/// Se crea solo si no hay clubes. Corre en Development, o en Production con <c>Seed:DemoClub=true</c>
+/// para probar el bot antes de tener el panel.
 /// </summary>
 public static class DbSeeder
 {
-    public static async Task SeedAsync(EZmatchDbContext db, TimeProvider time, ILogger logger)
+    private const string DemoSlug = "padel-demo";
+
+    /// <param name="chatwootInboxId">Inbox de Chatwoot a vincular con el club demo (se actualiza si ya existe).</param>
+    public static async Task SeedAsync(EZmatchDbContext db, TimeProvider time, int? chatwootInboxId, ILogger logger)
     {
-        if (await db.Clubs.AnyAsync()) return;
+        if (await db.Clubs.AnyAsync())
+        {
+            if (chatwootInboxId is not null)
+            {
+                var updated = await db.Clubs
+                    .Where(c => c.Slug == DemoSlug && c.ChatwootInboxId != chatwootInboxId)
+                    .ExecuteUpdateAsync(s => s.SetProperty(c => c.ChatwootInboxId, chatwootInboxId));
+                if (updated > 0) logger.LogInformation("Club demo vinculado al inbox {InboxId}", chatwootInboxId);
+            }
+            return;
+        }
 
         var club = new Club
         {
             Name = "Pádel Demo",
-            Slug = "padel-demo",
+            Slug = DemoSlug,
+            ChatwootInboxId = chatwootInboxId,
             Address = "Bv. Oroño 1234, Rosario",
             Phone = "+5493410000000",
             BotInstructions = "Se alquilan paletas a $3.000. Hay estacionamiento gratuito. Vestuarios con duchas.",

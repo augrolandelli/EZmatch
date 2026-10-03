@@ -39,7 +39,7 @@ public class BookingServiceTests(ApiFixture fixture)
         var ex = await Assert.ThrowsAsync<AppException>(() => CreateAsync(club.Id, Request(Tomorrow, EightPm, "+5493415550099")));
         Assert.Equal("conflict", ex.Code);
 
-        var alternatives = (IReadOnlyList<AvailableSlotDto>)ex.Details!.GetType().GetProperty("alternatives")!.GetValue(ex.Details)!;
+        var alternatives = Assert.IsType<BookingAlternatives>(ex.Details).Alternatives;
         Assert.Equal([new TimeOnly(17, 0), new TimeOnly(18, 30), new TimeOnly(21, 30)], alternatives.Select(a => a.StartTime));
     }
 
@@ -48,7 +48,7 @@ public class BookingServiceTests(ApiFixture fixture)
     {
         var club = await fixture.CreateClubAsync(padelCourts: 3);
 
-        var attempts = Enumerable.Range(0, 12).Select(i => Task.Run(async () =>
+        var attempts = Enumerable.Range(0, 30).Select(i => Task.Run(async () =>
         {
             try
             {

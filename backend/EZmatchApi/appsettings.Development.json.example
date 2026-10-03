@@ -10,5 +10,11 @@
         "Microsoft.EntityFrameworkCore": "Warning"
       }
     }
+  },
+  "Bot": {
+    "ApiKey": "dev-only-bot-key-cambiar-en-produccion-0123456789"
+  },
+  "Seed": {
+    "ChatwootInboxId": "1"
   }
 }

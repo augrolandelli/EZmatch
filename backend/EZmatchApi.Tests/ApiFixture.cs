@@ -23,7 +23,22 @@ public class ApiFixture : WebApplicationFactory<Program>, IAsyncLifetime
 
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:17").Build();
 
+    public const string BotKey = "test-bot-key-0123456789abcdef0123456789";
+
     public FakeTimeProvider Clock { get; } = new(Now);
+
+    private static int _lastInboxId = 1000;
+
+    /// <summary>Id de inbox de Chatwoot único por test.</summary>
+    public static int NextInboxId() => Interlocked.Increment(ref _lastInboxId);
+
+    /// <summary>Cliente HTTP con la clave del bot.</summary>
+    public HttpClient BotClient()
+    {
+        var client = CreateClient();
+        client.DefaultRequestHeaders.Add("X-Bot-Key", BotKey);
+        return client;
+    }
 
     public async Task InitializeAsync()
     {
@@ -44,6 +59,7 @@ public class ApiFixture : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseEnvironment("Testing");
         builder.UseSetting("ConnectionStrings:DefaultConnection", _postgres.GetConnectionString());
         builder.UseSetting("Serilog:MinimumLevel:Default", "Warning");
+        builder.UseSetting("Bot:ApiKey", BotKey);
         builder.ConfigureServices(services =>
         {
             services.RemoveAll<TimeProvider>();

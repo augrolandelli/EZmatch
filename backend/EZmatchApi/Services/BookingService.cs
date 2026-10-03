@@ -33,6 +33,24 @@ public class BookingService(
 {
     private const int AlternativesCount = 3;
 
+    /// <summary>Clave de advisory lock (bigint) derivada del id de la cancha.</summary>
+    private static long CourtLockKey(Guid courtId)
+    {
+        Span<byte> bytes = stackalloc byte[16];
+        courtId.TryWriteBytes(bytes);
+        return BitConverter.ToInt64(bytes[..8]) ^ BitConverter.ToInt64(bytes[8..]);
+    }
+
+    /// <summary>SQLSTATE de Postgres dentro de la cadena de excepciones (EF puede envolverla dos veces).</summary>
+    private static string? SqlState(Exception ex)
+    {
+        for (var current = ex; current is not null; current = current.InnerException)
+        {
+            if (current is PostgresException pg) return pg.SqlState;
+        }
+        return null;
+    }
+
     /// <inheritdoc />
     public async Task<BookingDto> CreateAsync(Guid clubId, CreateBookingRequest request, BookingSource source, CancellationToken ct = default)
     {
@@ -86,7 +104,7 @@ public class BookingService(
             throw new AppException("Ese horario no existe en la grilla del club.",
                 StatusCodes.Status400BadRequest, "slot_not_in_grid")
             {
-                Details = new { alternatives = await AlternativesAsync(clubId, request, zone, fromBot, ct) },
+                Details = new BookingAlternatives(await AlternativesAsync(clubId, request, zone, fromBot, ct)),
             };
         }
 
@@ -125,12 +143,19 @@ public class BookingService(
 
             try
             {
+                // Inserciones concurrentes sobre la misma cancha se esperan mutuamente en el chequeo de
+                // exclusión y Postgres aborta alguna por deadlock. Un lock por cancha las encola: quien
+                // llega segundo ve la reserva ya confirmada y recibe una violación de exclusión limpia.
+                await using var tx = await db.Database.BeginTransactionAsync(ct);
+                await db.Database.ExecuteSqlAsync($"SELECT pg_advisory_xact_lock({CourtLockKey(slot.CourtId)})", ct);
                 await db.SaveChangesAsync(ct);
+                await tx.CommitAsync(ct);
+
                 logger.LogInformation("Reserva {BookingId} creada en {CourtId} para {StartsAt} ({Source})",
                     booking.Id, slot.CourtId, slot.StartsAt, source);
                 return ToDto(booking, slot.CourtName, slot.Sport, customer, zone);
             }
-            catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.ExclusionViolation })
+            catch (Exception ex) when (SqlState(ex) is PostgresErrorCodes.ExclusionViolation)
             {
                 // Otra reserva ganó la carrera por esta cancha: probar con la siguiente.
                 db.Entry(booking).State = EntityState.Detached;
@@ -138,7 +163,7 @@ public class BookingService(
         }
 
         throw AppException.Conflict("Ese turno ya está ocupado.",
-            new { alternatives = await AlternativesAsync(clubId, request, zone, fromBot, ct) });
+            new BookingAlternatives(await AlternativesAsync(clubId, request, zone, fromBot, ct)));
     }
 
     /// <inheritdoc />

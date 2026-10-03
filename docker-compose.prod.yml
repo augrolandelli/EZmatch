@@ -19,6 +19,10 @@ services:
       ASPNETCORE_URLS: http://+:5000
       ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=ezmatch;Username=ezmatch;Password=${POSTGRES_PASSWORD}"
       Cors__AllowedOrigins__0: ${FRONTEND_URL}
+      Bot__ApiKey: ${BOT_API_KEY}
+      # Club demo para probar el bot antes de tener el panel (Fase 2). Desactivar con un club real.
+      Seed__DemoClub: ${SEED_DEMO_CLUB:-false}
+      Seed__ChatwootInboxId: ${SEED_CHATWOOT_INBOX_ID:-}
     depends_on:
       postgres:
         condition: service_healthy
