@@ -26,7 +26,7 @@ public static partial class BotText
 
     /// <summary>
     /// "pádel", "Padel", "fútbol 5", "futbol5", "f5", "tenis"… Si dice solo "fútbol" y el club tiene
-    /// un único tipo de fútbol, se elige ese.
+    /// un único tipo de fútbol, se elige ese. Vacío vale si el club tiene un solo deporte.
     /// </summary>
     public static Sport ParseSport(string? raw, IReadOnlyCollection<Sport> clubSports)
     {
@@ -40,6 +40,12 @@ public static partial class BotText
             "tenis" or "tennis" => Sport.Tenis,
             _ => Enum.TryParse<Sport>(key, ignoreCase: true, out var parsed) ? parsed : null,
         };
+
+        // Sin deporte y el club tiene uno solo: no hace falta preguntarlo.
+        if (sport is null && key.Length == 0 && clubSports.Count == 1)
+        {
+            sport = clubSports.First();
+        }
 
         if (sport is null && key is "futbol" or "football" or "soccer")
         {

@@ -69,6 +69,13 @@ public class BotTextTests
         Assert.Equal("invalid_sport", Assert.Throws<AppException>(() => BotText.ParseSport(raw, ClubSports)).Code);
 
     [Fact]
+    public void ParseSport_Empty_UsesTheOnlySportOfTheClub()
+    {
+        Assert.Equal(Sport.Padel, BotText.ParseSport("", [Sport.Padel]));
+        Assert.Equal("invalid_sport", Assert.Throws<AppException>(() => BotText.ParseSport("", ClubSports)).Code);
+    }
+
+    [Fact]
     public void ParseSport_AmbiguousFutbol_IsRejected() =>
         Assert.Throws<AppException>(() => BotText.ParseSport("fútbol", [Sport.Futbol5, Sport.Futbol7]));
 
