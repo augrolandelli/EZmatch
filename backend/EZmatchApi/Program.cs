@@ -1,5 +1,6 @@
 using EZmatchApi.Common;
 using EZmatchApi.Data;
+using EZmatchApi.Services;
 using FluentValidation;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
@@ -32,6 +33,9 @@ builder.Services.AddCors(options =>
 
 // Validación y servicios de aplicación
 builder.Services.AddValidatorsFromAssemblyContaining<Program>();
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddScoped<IAvailabilityService, AvailabilityService>();
+builder.Services.AddScoped<IBookingService, BookingService>();
 
 builder.Services.AddOpenApi();
 
@@ -47,6 +51,16 @@ if (app.Environment.IsDevelopment())
 if (app.Environment.IsDevelopment() || app.Environment.IsProduction())
 {
     await app.ApplyMigrationsAsync();
+}
+
+// Semilla de datos (club demo) solo en desarrollo
+if (app.Environment.IsDevelopment())
+{
+    using var scope = app.Services.CreateScope();
+    await DbSeeder.SeedAsync(
+        scope.ServiceProvider.GetRequiredService<EZmatchDbContext>(),
+        scope.ServiceProvider.GetRequiredService<TimeProvider>(),
+        scope.ServiceProvider.GetRequiredService<ILogger<Program>>());
 }
 
 app.UseSerilogRequestLogging();

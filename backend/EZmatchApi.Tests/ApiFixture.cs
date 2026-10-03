@@ -1,8 +1,12 @@
 using EZmatchApi.Data;
+using EZmatchApi.Models;
+using EZmatchApi.Services;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Time.Testing;
 using Testcontainers.PostgreSql;
 
 namespace EZmatchApi.Tests;
@@ -10,11 +14,16 @@ namespace EZmatchApi.Tests;
 /// <summary>
 /// API real + PostgreSQL real en un contenedor efímero (Testcontainers).
 /// Postgres real es obligatorio: la exclusión anti-superposición no existe en SQLite/InMemory.
+/// Cada test crea su propio club, así los datos no se pisan entre tests.
 /// </summary>
 public class ApiFixture : WebApplicationFactory<Program>, IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:17")
-        .Build();
+    /// <summary>"Ahora" fijo: lunes 2026-10-05 09:00 en Argentina (12:00 UTC).</summary>
+    public static readonly DateTimeOffset Now = new(2026, 10, 5, 12, 0, 0, TimeSpan.Zero);
+
+    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:17").Build();
+
+    public FakeTimeProvider Clock { get; } = new(Now);
 
     public async Task InitializeAsync()
     {
@@ -35,7 +44,51 @@ public class ApiFixture : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseEnvironment("Testing");
         builder.UseSetting("ConnectionStrings:DefaultConnection", _postgres.GetConnectionString());
         builder.UseSetting("Serilog:MinimumLevel:Default", "Warning");
+        builder.ConfigureServices(services =>
+        {
+            services.RemoveAll<TimeProvider>();
+            services.AddSingleton<TimeProvider>(Clock);
+        });
     }
+
+    /// <summary>Ejecuta <paramref name="action"/> en un scope de DI propio (como una request).</summary>
+    public async Task<T> RunAsync<T>(Func<IServiceProvider, Task<T>> action)
+    {
+        await using var scope = Services.CreateAsyncScope();
+        return await action(scope.ServiceProvider);
+    }
+
+    public Task RunAsync(Func<IServiceProvider, Task> action) =>
+        RunAsync<object?>(async sp => { await action(sp); return null; });
+
+    /// <summary>Club nuevo con <paramref name="padelCourts"/> canchas de pádel con la grilla dada (o la default).</summary>
+    public async Task<Club> CreateClubAsync(
+        int padelCourts = 3, Action<Club>? configure = null, Func<List<SlotTemplate>>? grid = null)
+    {
+        var club = new Club { Name = "Club Test", Slug = $"test-{Guid.NewGuid():N}" };
+        configure?.Invoke(club);
+        for (var i = 1; i <= padelCourts; i++)
+        {
+            club.Courts.Add(new Court
+            {
+                Name = $"Cancha {i}", Sport = Sport.Padel, SortOrder = i, IsCovered = i == 1,
+                SlotTemplates = (grid ?? DefaultPadelGrid)(),
+            });
+        }
+
+        await RunAsync(async sp =>
+        {
+            var db = sp.GetRequiredService<EZmatchDbContext>();
+            db.Clubs.Add(club);
+            await db.SaveChangesAsync();
+        });
+        return club;
+    }
+
+    /// <summary>Todos los días: 08:00, 09:30, 11:00 … 23:00 (90 min). $24.000, desde las 17:00 $30.000.</summary>
+    public static List<SlotTemplate> DefaultPadelGrid() => SlotGridGenerator.Generate(
+        new TimeOnly(8, 0), new TimeOnly(23, 0), 90, SlotGridGenerator.AllDays,
+        start => start >= new TimeOnly(17, 0) ? 30000m : 24000m);
 }
 
 [CollectionDefinition(Name)]
