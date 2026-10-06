@@ -245,6 +245,9 @@ public class BookingService(
             .ToList();
     }
 
+    /// <summary>Mapeo con <see cref="Booking.Court"/> y <see cref="Booking.Customer"/> cargados.</summary>
+    public static BookingDto ToDto(Booking b, TimeZoneInfo zone) => ToDto(b, b.Court.Name, b.Court.Sport, b.Customer, zone);
+
     private static BookingDto ToDto(Booking b, string courtName, Sport sport, Customer customer, TimeZoneInfo zone)
     {
         var localStart = ClubTime.ToLocal(b.StartsAt, zone);

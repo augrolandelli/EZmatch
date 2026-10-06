@@ -16,4 +16,35 @@ public static class PhoneNumber
         }
         return "+" + digits;
     }
+
+    /// <summary>
+    /// Teléfono tipeado en el panel por el club. Si trae "+", se toma tal cual (internacional).
+    /// Si no, se asume un celular argentino y se lleva al formato de WhatsApp (+54 9 área número),
+    /// para que el mismo cliente se reconozca reserve por el mostrador o por el bot:
+    /// "341 555-0001" / "0341 555 0001" / "54 341 5550001" / "549 341 5550001" → "+5493415550001".
+    /// </summary>
+    public static string NormalizeArgentine(string? raw)
+    {
+        var text = (raw ?? string.Empty).Trim();
+        if (text.StartsWith('+')) return Normalize(text);
+
+        var digits = new string(text.Where(char.IsAsciiDigit).ToArray());
+        if (digits.StartsWith("00")) return Normalize(digits[2..]);
+
+        if (digits.StartsWith("54") && digits.Length >= 12)
+        {
+            var national = digits[2..];
+            return Normalize("549" + (national.StartsWith('9') ? national[1..] : national));
+        }
+
+        // Número nacional: sin el 0 de larga distancia, código de área + número = 10 dígitos.
+        if (digits.StartsWith('0')) digits = digits[1..];
+        if (digits.Length != 10)
+        {
+            throw new AppException(
+                "El teléfono no es válido. Ingresá código de área + número, sin 0 ni 15 (ej. 341 555 0001).",
+                StatusCodes.Status400BadRequest, "invalid_phone");
+        }
+        return "+549" + digits;
+    }
 }
