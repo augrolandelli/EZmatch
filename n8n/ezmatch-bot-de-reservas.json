@@ -1,0 +1,1362 @@
+{
+  "name": "EZmatch - Bot de reservas",
+  "nodes": [
+    {
+      "id": "a0000000-0000-4000-8000-000000000001",
+      "name": "LEEME PRIMERO",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        0
+      ],
+      "parameters": {
+        "content": "## EZmatch - Bot de reservas\n\nAtiende el WhatsApp de un club (via Chatwoot) y reserva turnos contra la API de EZmatch. La API es la unica fuente de verdad: el bot nunca decide disponibilidad ni precios.\n\n**1. Nodo `config`**\n- `chatwoot_url`, `account_id`: tu Chatwoot.\n- `api_url`: URL publica de EZmatchApi (Easypanel).\n- `nombre_asistente`: opcional (vacio = \"el asistente de reservas\").\n\n**2. Credenciales**\n- `EZmatch Bot Key` (Header Auth X-Bot-Key) = BOT_API_KEY de la API.\n- `chatwoot` y `OpenAI account`: las mismas de la concesionaria.\n\n**3. Chatwoot**: webhook de cuenta, evento Mensaje creado -> `entrada_chatwoot` (path `chatwoot-demo-concesionaria`, compartido con la muni y la concesionaria: solo uno de los tres puede estar activo a la vez).\nEl club se resuelve por inbox (`Club.ChatwootInboxId`). Inboxes sin club se ignoran.\n\n**4. Etiquetas que callan al bot**: pide-humano, bot-pausado. Sacar la etiqueta = el bot vuelve a responder.\n\n**Herramientas**: el telefono y el inbox los pone el flujo, nunca la IA: un cliente solo puede ver y cancelar sus propias reservas.",
+        "height": 620,
+        "width": 460,
+        "color": 3
+      }
+    },
+    {
+      "id": "a0000000-0000-4000-8000-000000000002",
+      "name": "entrada_chatwoot",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        520,
+        400
+      ],
+      "webhookId": "6e2b8c1d-4f3a-4b5e-9c7d-8a9b0c1d2e3f",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "chatwoot-demo-concesionaria",
+        "options": {}
+      }
+    },
+    {
+      "id": "a0000000-0000-4000-8000-000000000003",
+      "name": "config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        740,
+        400
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b0000000-0000-4000-8000-000000000001",
+              "name": "chatwoot_url",
+              "value": "https://n8n-chatwoot.dxjsg5.easypanel.host/",
+              "type": "string"
+            },
+            {
+              "id": "b0000000-0000-4000-8000-000000000002",
+              "name": "account_id",
+              "value": 1,
+              "type": "number"
+            },
+            {
+              "id": "b0000000-0000-4000-8000-000000000003",
+              "name": "api_url",
+              "value": "https://ezmatch-backend.dxjsg5.easypanel.host",
+              "type": "string"
+            },
+            {
+              "id": "b0000000-0000-4000-8000-000000000004",
+              "name": "nombre_asistente",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "b0000000-0000-4000-8000-000000000005",
+              "name": "etiqueta_pide_humano",
+              "value": "pide-humano",
+              "type": "string"
+            },
+            {
+              "id": "b0000000-0000-4000-8000-000000000006",
+              "name": "etiqueta_bot_pausado",
+              "value": "bot-pausado",
+              "type": "string"
+            },
+            {
+              "id": "b0000000-0000-4000-8000-000000000007",
+              "name": "buffer_segundos",
+              "value": 12,
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "a0000000-0000-4000-8000-000000000004",
+      "name": "normalizar_entrada",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        400
+      ],
+      "parameters": {
+        "jsCode": "// Webhook de cuenta de Chatwoot: evento \"message_created\" (Ajustes > Integraciones > Webhooks).\nconst cfg = $('config').first().json;\nconst faltan = [];\nif (!cfg.chatwoot_url) faltan.push('chatwoot_url');\nif (!Number(cfg.account_id)) faltan.push('account_id');\nif (!cfg.api_url || /COMPLETAR/.test(cfg.api_url)) faltan.push('api_url');\nif (faltan.length) throw new Error('Completar en el nodo config: ' + faltan.join(', '));\n\nconst b = $('entrada_chatwoot').first().json.body || {};\n// Solo mensajes del cliente: se ignoran otros eventos, los salientes (incluidas las respuestas del propio bot) y las notas privadas\nif (b.event !== 'message_created') return [];\nif (!['incoming', 0, '0'].includes(b.message_type) || b.private) return [];\n\nconst conv = b.conversation || {};\nconst conversationId = String(conv.id || '').trim();\nif (!/^\\d+$/.test(conversationId)) return [];\nconst inboxId = Number((b.inbox && b.inbox.id) || conv.inbox_id || 0);\nif (!inboxId) return [];\n\nconst sender = b.sender || (conv.meta && conv.meta.sender) || {};\nconst labels = Array.isArray(conv.labels) ? conv.labels : [];\n// Inboxes sin telefono (web/API, solo para pruebas): id estable con un codigo de pais inexistente (+99)\nconst telefono = String(sender.phone_number || '').trim() || ('+99' + String(Number(sender.id) || 0).padStart(8, '0'));\n\nconst adjuntos = Array.isArray(b.attachments) ? b.attachments : [];\nconst tipos = adjuntos.map(a => a.file_type);\nconst contacto = adjuntos.find(a => a.file_type === 'contact');\nconst adjunto = tipos.includes('image') ? '[FOTO]'\n  : tipos.includes('audio') ? '[AUDIO]'\n  : contacto ? '[CONTACTO COMPARTIDO' + (contacto.fallback_title ? ': ' + contacto.fallback_title : '') + ']'\n  : tipos.includes('location') ? '[UBICACION]'\n  : tipos.includes('video') ? '[VIDEO]'\n  : adjuntos.length ? '[ARCHIVO]' : '';\n// El bot se calla cuando la conversacion paso a un humano o alguien lo pauso a mano\nconst etiquetasStop = [cfg.etiqueta_pide_humano, cfg.etiqueta_bot_pausado];\n\nreturn [{ json: {\n  conversation_id: conversationId,\n  inbox_id: inboxId,\n  contact_id: Number(sender.id) || 0,\n  nombre: String(sender.name || '').trim(),\n  telefono,\n  labels,\n  bot_activo: !labels.some(l => etiquetasStop.includes(l)),\n  audio_url: String((adjuntos.find(a => a.file_type === 'audio') || {}).data_url || ''),\n  msg: { id: String(b.id || $execution.id), texto: [String(b.content || '').trim(), adjunto].filter(Boolean).join(' '), ts: Date.now() },\n} }];"
+      }
+    },
+    {
+      "id": "a0000000-0000-4000-8000-000000000005",
+      "name": "bot_activo",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1180,
+        400
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c0000000-0000-4000-8000-000000000001",
+              "leftValue": "={{ $json.bot_activo }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "a0000000-0000-4000-8000-000000000006",
+      "name": "contexto_club",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1400,
+        400
+      ],
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "g7QA9WhmzvnKbV9f",
+          "name": "EZmatch Bot Key"
+        }
+      },
+      "parameters": {
+        "url": "={{ $('config').first().json.api_url.replace(/\\/+$/, '') }}/api/bot/context",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "inboxId",
+              "value": "={{ $('normalizar_entrada').first().json.inbox_id }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "a0000000-0000-4000-8000-000000000007",
+      "name": "club_configurado",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        1620,
+        380
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "c0000000-0000-4000-8000-000000000002",
+                    "leftValue": "={{ $json.clubId }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "string",
+                      "operation": "notEmpty",
+                      "singleValue": true
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "ok"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "c0000000-0000-4000-8000-000000000003",
+                    "leftValue": "={{ $json.code }}",
+                    "rightValue": "club_not_found",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "inbox_sin_club"
+            }
+          ]
+        },
+        "looseTypeValidation": true,
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "error_api"
+        }
+      }
+    },
+    {
+      "id": "a0000000-0000-4000-8000-000000000008",
+      "name": "ignorar_inbox",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1860,
+        200
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "a0000000-0000-4000-8000-000000000009",
+      "name": "es_audio",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1860,
+        400
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 3,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "c0000000-0000-4000-8000-000000000004",
+              "leftValue": "={{ $('normalizar_entrada').first().json.audio_url }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "a0000000-0000-4000-8000-000000000010",
+      "name": "descargar_audio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1860,
+        640
+      ],
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "parameters": {
+        "url": "={{ $('normalizar_entrada').first().json.audio_url }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "a0000000-0000-4000-8000-000000000011",
+      "name": "preparar_audio",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2080,
+        640
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "jsCode": "// Whisper decide el formato por la extension: las notas de voz de WhatsApp (.oga/.opus) se renombran a .ogg\nconst item = $input.first();\nconst bin = item.binary && item.binary.data;\nif (bin && !/\\.(flac|mp3|mp4|mpeg|mpga|m4a|ogg|wav|webm)$/i.test(bin.fileName || '')) {\n  bin.fileName = 'audio.ogg';\n  bin.fileExtension = 'ogg';\n  bin.mimeType = 'audio/ogg';\n}\nreturn [item];"
+      }
+    },
+    {
+      "id": "a0000000-0000-4000-8000-000000000012",
+      "name": "transcribir_audio",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        2300,
+        640
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "openAiApi": {
+          "id": "xkJhuQCF6xnGXSai",
+          "name": "OpenAI account"
+        }
+      },
+      "parameters": {
+        "resource": "audio",
+        "operation": "transcribe",
+        "options": {}
+      }
+    },
+    {
+      "id": "a0000000-0000-4000-8000-000000000013",
+      "name": "push_buffer",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        2300,
+        400
+      ],
+      "credentials": {
+        "redis": {
+          "id": "k4FiS0C4J6rux379",
+          "name": "Redis account 2"
+        }
+      },
+      "parameters": {
+        "operation": "push",
+        "list": "=ezmatch:buffer:{{ $('normalizar_entrada').first().json.conversation_id }}",
+        "messageData": "={{ JSON.stringify({ ...$('normalizar_entrada').first().json.msg, texto: ($('transcribir_audio').isExecuted && $('transcribir_audio').first().json.text) ? ('[AUDIO TRANSCRIPTO] ' + $('transcribir_audio').first().json.text.trim()) : $('normalizar_entrada').first().json.msg.texto }) }}",
+        "tail": true
+      }
+    },
+    {
+      "id": "a0000000-0000-4000-8000-000000000014",
+      "name": "leer_buffer",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        2520,
+        400
+      ],
+      "credentials": {
+        "redis": {
+          "id": "k4FiS0C4J6rux379",
+          "name": "Redis account 2"
+        }
+      },
+      "parameters": {
+        "operation": "get",
+        "propertyName": "mensajes",
+        "key": "=ezmatch:buffer:{{ $('normalizar_entrada').first().json.conversation_id }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "a0000000-0000-4000-8000-000000000015",
+      "name": "decidir_buffer",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        2740,
+        400
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "c0000000-0000-4000-8000-000000000005",
+                    "leftValue": "={{ ($json.mensajes && $json.mensajes.length) ? JSON.parse($json.mensajes.at(-1)).id : '' }}",
+                    "rightValue": "={{ $('normalizar_entrada').first().json.msg.id }}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "notEquals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "otro_mensaje_mas_nuevo"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "c0000000-0000-4000-8000-000000000006",
+                    "leftValue": "={{ Date.now() - JSON.parse($json.mensajes.at(-1)).ts }}",
+                    "rightValue": "={{ $('config').first().json.buffer_segundos * 1000 }}",
+                    "operator": {
+                      "type": "number",
+                      "operation": "gte"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "seguir"
+            }
+          ]
+        },
+        "looseTypeValidation": true,
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "esperar"
+        }
+      }
+    },
+    {
+      "id": "a0000000-0000-4000-8000-000000000016",
+      "name": "cortar_aca",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        2980,
+        220
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "a0000000-0000-4000-8000-000000000017",
+      "name": "esperar",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        2980,
+        580
+      ],
+      "webhookId": "7f3c9d2e-5a4b-4c6d-8e7f-9a0b1c2d3e4f",
+      "parameters": {
+        "amount": 3,
+        "unit": "seconds"
+      }
+    },
+    {
+      "id": "a0000000-0000-4000-8000-000000000018",
+      "name": "borrar_buffer",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        2980,
+        400
+      ],
+      "credentials": {
+        "redis": {
+          "id": "k4FiS0C4J6rux379",
+          "name": "Redis account 2"
+        }
+      },
+      "parameters": {
+        "operation": "delete",
+        "key": "=ezmatch:buffer:{{ $('normalizar_entrada').first().json.conversation_id }}"
+      }
+    },
+    {
+      "id": "a0000000-0000-4000-8000-000000000019",
+      "name": "unir_mensajes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3200,
+        400
+      ],
+      "parameters": {
+        "jsCode": "// Toma la lista del buffer (antes de borrarla) y arma un solo texto.\nconst lista = $('leer_buffer').last().json.mensajes || [];\nconst msgs = lista.map(s => { try { return JSON.parse(s); } catch (e) { return null; } })\n  .filter(Boolean)\n  .sort((a, b) => a.ts - b.ts);\n\nconst partes = [];\nfor (const m of msgs) {\n  const t = String(m.texto || '').trim() || '[ARCHIVO]';\n  if (partes[partes.length - 1] !== t) partes.push(t);\n}\nreturn [{ json: { chat_input: partes.join('\\n') || '[ARCHIVO]' } }];"
+      }
+    },
+    {
+      "id": "a0000000-0000-4000-8000-000000000020",
+      "name": "contar_turno",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        3420,
+        400
+      ],
+      "credentials": {
+        "redis": {
+          "id": "k4FiS0C4J6rux379",
+          "name": "Redis account 2"
+        }
+      },
+      "parameters": {
+        "operation": "incr",
+        "key": "=ezmatch:turnos:{{ $('normalizar_entrada').first().json.conversation_id }}",
+        "expire": true,
+        "ttl": 5184000
+      }
+    },
+    {
+      "id": "a0000000-0000-4000-8000-000000000021",
+      "name": "agente",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        3660,
+        400
+      ],
+      "onError": "continueErrorOutput",
+      "parameters": {
+        "promptType": "define",
+        "text": "=Nombre del contacto en WhatsApp: {{ $('normalizar_entrada').first().json.nombre || 'desconocido' }}\n{{ Number(Object.values($('contar_turno').first().json).pop()) === 1 ? 'Primer mensaje de la charla: sí (saludá y presentate)' : 'Primer mensaje de la charla: no (no te vuelvas a presentar)' }}\n\nMensaje del cliente:\n{{ $('unir_mensajes').first().json.chat_input }}",
+        "options": {
+          "systemMessage": "=# Asistente de reservas de {{ $('contexto_club').first().json.clubName }}\n\nSos {{ $('config').first().json.nombre_asistente ? $('config').first().json.nombre_asistente + ', el asistente' : 'el asistente' }} de reservas de {{ $('contexto_club').first().json.clubName }}. Atendés el WhatsApp del club: la gente escribe para ver turnos libres, reservar, ver o cancelar sus reservas y preguntar cosas del club.\n\nNo te presentes como bot ni como IA, y tampoco digas que sos una persona. Si te preguntan directo, no lo niegues: \"Soy el asistente virtual del club, te ayudo con las reservas. Si preferís hablar con alguien del club avisame\".\n\n## DATOS DEL CLUB\n\n{{ $('contexto_club').first().json.summary }}\n\nTodo lo que digas del club (precios, canchas, políticas, dirección) sale de acá o de las herramientas. No inventes nada más: promociones, clases, torneos, servicios, teléfonos.\n\n## CÓMO ESCRIBIR\n\n- Mensajes cortos, como el encargado del club respondiendo desde el celular. Nada de párrafos ni tono de folleto.\n- De una a tres burbujas por respuesta, separadas por un doble salto de línea (\\n\\n). Muchas veces una alcanza.\n- Español rioplatense con voseo (tenés, querés, fijate). Cercano y amable, sin exagerar.\n- Nunca uses ¿ ni ¡. Toda pregunta termina con \"?\". Sin emojis, sin negritas, sin asteriscos.\n- Como mucho una pregunta por respuesta.\n- Horarios en formato 24 h (\"20:00\") y precios como \"$30.000\".\n- Para listar horarios usá una línea por horario dentro de la misma burbuja, empezando con un guion: \"- 20:00 (2 canchas)\". Mostrá como mucho 5 horarios: los más cercanos a lo que pidió.\n- Al confirmar algo, la fecha va siempre con día y número: \"el jueves 8/10\".\n- Usá el nombre de la persona de vez en cuando, no en cada mensaje.\n\n## HERRAMIENTAS (NUNCA INVENTES DISPONIBILIDAD NI PRECIOS)\n\n- consultar_disponibilidad: antes de decir que hay o que no hay lugar.\n- reservar_turno: solo después de que la persona confirme explícitamente.\n- mis_turnos: para ver sus reservas activas, y siempre antes de cancelar (ahí está el id).\n- cancelar_turno: con el id que devolvió mis_turnos, después de que confirme.\n\nLas herramientas devuelven un \"summary\" listo para usar, o un error con \"message\" y \"code\". Explicá el error con tus palabras; si trae opciones cercanas, ofrecelas.\n\n## FLUJO\n\n### 1. Saludo\nSi es el primer mensaje de la charla, saludá según la hora actual del club (exactamente \"buen día\" de 6 a 13, \"buenas tardes\" de 13 a 20 y \"buenas noches\" de 20 a 6; nunca \"buenas días\") y presentate: \"Hola, buenas tardes! Soy el asistente de reservas de {{ $('contexto_club').first().json.clubName }}\\n\\nEn qué te puedo ayudar?\". Si el primer mensaje ya trae una consulta, saludá y respondé la consulta en la misma respuesta.\n\n### 2. Consultar turnos\n- Necesitás el día. Si el club tiene un solo deporte, no preguntes el deporte. Si tiene varios y no queda claro, preguntá cuál.\n- Las fechas relativas (\"hoy\", \"mañana\", \"el viernes\") se convierten con la lista \"Próximos días\" de los datos del club. En las herramientas usá siempre la fecha AAAA-MM-DD.\n- Franjas: \"a la mañana\" = desde 08:00 hasta 12:00; \"a la tarde\" = desde 13:00 hasta 19:00; \"a la noche\" = desde 19:00. Si dice una hora (\"a las 20\"), consultá ese día y ofrecé esa hora o las más cercanas.\n- Si no hay lugar, decilo corto y ofrecé otro horario u otro día (consultá antes de ofrecer).\n\n### 3. Reservar\n- Necesitás deporte, día, hora y el nombre de quien reserva. Si el \"Nombre del contacto en WhatsApp\" parece un nombre real (ej. \"Augusto Rolandelli\"), usá ese nombre sin preguntarlo. Solo si es desconocido, un apodo, un número o un emoji, preguntá \"A nombre de quién lo anoto?\".\n- Antes de reservar, confirmá en una línea: \"Te reservo pádel el jueves 8/10 a las 20:00 a nombre de Juan, te lo confirmo?\". Solo con un sí explícito llamás reservar_turno. Si ya ofreciste un turno concreto (día y hora) y la persona respondió que sí (\"dale\", \"sí\", \"reservalo\", \"ok\"), eso ya es la confirmación: reservá en ese momento sin volver a preguntar.\n- Con la reserva hecha, pasá el resumen (día, horario, cancha y precio) y aclará que se paga en el club. Ejemplo: \"Listo Juan, quedó reservado pádel el jueves 8/10 de 20:00 a 21:30 en la Cancha 2\\n\\nSon $30.000 y se paga en el club. Cualquier cosa me escribís por acá\".\n- Si reservar_turno devuelve customer_name_required, pedí el nombre. Si devuelve conflict, el turno se ocupó recién: ofrecé las opciones cercanas que vienen en el mensaje.\n\n### 4. Ver o cancelar\n- Usá mis_turnos. Si tiene varias reservas y no queda claro cuál quiere cancelar, preguntá.\n- Antes de cancelar, confirmá: \"Te cancelo el turno del jueves 8/10 a las 20:00, confirmo?\".\n- Si cancelar_turno devuelve cancellation_too_late, explicá la política y derivá a alguien del club.\n\n## DERIVAR A ALGUIEN DEL CLUB (estado \"pide_humano\")\n- Pide hablar con una persona.\n- Reclamos, enojo, objetos perdidos, problemas con un pago.\n- Clases, escuelita, torneos, alquiler por mes, turnos fijos o eventos: eso lo maneja el club.\n- Cancelación fuera de plazo, número bloqueado (customer_blocked) o un error de las herramientas que se repite.\n- Cualquier cosa que no puedas resolver con los datos del club y las herramientas.\nRespuesta tipo: \"Dale, le paso tu consulta a alguien del club que te escribe en un rato\".\n\n## MENSAJES QUE NO SON TEXTO\n- [AUDIO TRANSCRIPTO] seguido de texto: es lo que dijo en un audio, respondé normal sin mencionar el audio.\n- [AUDIO] solo: \"No me llegó bien el audio, me lo escribís?\"\n- [FOTO], [VIDEO] o [ARCHIVO]: no lo podés ver. Preguntale qué necesita.\n- [UBICACION]: si sirve, pasale la dirección del club.\n- [CONTACTO COMPARTIDO]: agradecé y preguntá para qué es.\n\n## FORMATO DE SALIDA (OBLIGATORIO)\n\nRespondé SIEMPRE con un único objeto JSON válido, sin texto antes ni después y sin bloques de código:\n\n{\n  \"respuesta\": \"el mensaje para la persona (hasta tres burbujas separadas por \\n\\n)\",\n  \"estado\": \"conversando\",\n  \"motivo_derivacion\": \"\"\n}\n\n- \"estado\": \"conversando\", o \"pide_humano\" solo en los casos de derivación.\n- \"motivo_derivacion\": solo con \"pide_humano\", en pocas palabras.\n",
+          "maxIterations": 12
+        }
+      }
+    },
+    {
+      "id": "a0000000-0000-4000-8000-000000000022",
+      "name": "modelo_openai",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        3480,
+        660
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "xkJhuQCF6xnGXSai",
+          "name": "OpenAI account"
+        }
+      },
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4.1-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4.1-mini"
+        },
+        "builtInTools": {},
+        "options": {
+          "temperature": 0.3
+        }
+      }
+    },
+    {
+      "id": "a0000000-0000-4000-8000-000000000023",
+      "name": "memoria",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        3640,
+        660
+      ],
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "=ezmatch_cw_{{ $('normalizar_entrada').first().json.conversation_id }}",
+        "contextWindowLength": 30
+      }
+    },
+    {
+      "id": "a0000000-0000-4000-8000-000000000024",
+      "name": "consultar_disponibilidad",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [
+        3800,
+        660
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "g7QA9WhmzvnKbV9f",
+          "name": "EZmatch Bot Key"
+        }
+      },
+      "parameters": {
+        "toolDescription": "Consulta los turnos libres del club para un día. Usala SIEMPRE antes de decir que hay o que no hay lugar. Devuelve 'summary' con los horarios libres (inicio y fin, cuántas canchas y precio) o un error con 'message'. Si no hay lugar, probá otra franja u otro día antes de ofrecerlo.",
+        "url": "={{ $('config').first().json.api_url.replace(/\\/+$/, '') }}/api/bot/availability",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "inboxId",
+              "value": "={{ $('normalizar_entrada').first().json.inbox_id }}"
+            },
+            {
+              "name": "date",
+              "value": "={{ $fromAI('fecha', 'Fecha en formato AAAA-MM-DD, tomada de la lista Próximos días de los datos del club. Ej: 2026-10-08', 'string') }}"
+            },
+            {
+              "name": "sport",
+              "value": "={{ $fromAI('deporte', 'Deporte con el valor para herramientas de los datos del club, ej: Padel o Futbol5. Vacío si el club tiene un solo deporte o si quiere ver todos', 'string', '') }}"
+            },
+            {
+              "name": "from",
+              "value": "={{ $fromAI('desde', 'Hora mínima de inicio HH:mm para filtrar una franja, ej: 19:00 para a la noche. Vacío para todo el día', 'string', '') }}"
+            },
+            {
+              "name": "to",
+              "value": "={{ $fromAI('hasta', 'Hora máxima de inicio HH:mm, ej: 12:00 para a la mañana. Vacío si no hay límite', 'string', '') }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "a0000000-0000-4000-8000-000000000025",
+      "name": "reservar_turno",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [
+        3960,
+        660
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "g7QA9WhmzvnKbV9f",
+          "name": "EZmatch Bot Key"
+        }
+      },
+      "parameters": {
+        "toolDescription": "Crea una reserva a nombre de la persona de este chat. Usala SOLO después de que la persona confirmó explícitamente deporte, día, hora y nombre. Devuelve 'summary' con la reserva confirmada (cancha, horario y precio) o un error con 'code': conflict (el turno se ocupó; el mensaje trae opciones cercanas), customer_name_required (falta el nombre), too_soon o too_far (fuera de la anticipación permitida), max_active_bookings (ya tiene el máximo de reservas) o customer_blocked (derivar).",
+        "method": "POST",
+        "url": "={{ $('config').first().json.api_url.replace(/\\/+$/, '') }}/api/bot/bookings",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ inboxId: $('normalizar_entrada').first().json.inbox_id, phone: $('normalizar_entrada').first().json.telefono, sport: $fromAI('deporte', 'Deporte con el valor para herramientas de los datos del club, ej: Padel. Vacío si el club tiene un solo deporte', 'string', ''), date: $fromAI('fecha', 'Fecha del turno en formato AAAA-MM-DD. Ej: 2026-10-08', 'string'), startTime: $fromAI('hora', 'Hora de inicio HH:mm exactamente como figura en consultar_disponibilidad. Ej: 20:00', 'string'), customerName: $fromAI('nombre', 'Nombre (y apellido si lo dio) de quien reserva. Vacío solo si ya reservó antes en el club', 'string', '') }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "a0000000-0000-4000-8000-000000000026",
+      "name": "mis_turnos",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [
+        4120,
+        660
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "g7QA9WhmzvnKbV9f",
+          "name": "EZmatch Bot Key"
+        }
+      },
+      "parameters": {
+        "toolDescription": "Lista las reservas activas (futuras y no canceladas) de la persona de este chat, cada una con su id. Usala cuando pregunte por sus turnos y siempre antes de cancelar, para obtener el id.",
+        "url": "={{ $('config').first().json.api_url.replace(/\\/+$/, '') }}/api/bot/bookings",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "inboxId",
+              "value": "={{ $('normalizar_entrada').first().json.inbox_id }}"
+            },
+            {
+              "name": "phone",
+              "value": "={{ $('normalizar_entrada').first().json.telefono }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "a0000000-0000-4000-8000-000000000027",
+      "name": "cancelar_turno",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [
+        4280,
+        660
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "g7QA9WhmzvnKbV9f",
+          "name": "EZmatch Bot Key"
+        }
+      },
+      "parameters": {
+        "toolDescription": "Cancela una reserva de la persona de este chat. Usala SOLO después de que confirme cuál cancela. Necesita el id que devolvió mis_turnos. Devuelve 'summary' con la reserva cancelada o un error con 'code': cancellation_too_late (falta menos de lo que permite la política: derivar a alguien del club), not_found o booking_not_active.",
+        "method": "POST",
+        "url": "={{ $('config').first().json.api_url.replace(/\\/+$/, '') }}/api/bot/bookings/{{ $fromAI('id_reserva', 'Id de la reserva (uuid) tal cual lo devolvió mis_turnos', 'string') }}/cancel",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ inboxId: $('normalizar_entrada').first().json.inbox_id, phone: $('normalizar_entrada').first().json.telefono }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "a0000000-0000-4000-8000-000000000028",
+      "name": "parsear_salida",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4000,
+        380
+      ],
+      "parameters": {
+        "jsCode": "const cfg = $('config').first().json;\nconst conv = $('normalizar_entrada').first().json;\n\n// 1) Parsear el JSON del agente (con red de seguridad)\nconst bruto = String($('agente').first().json.output || '').replace(/```json|```/g, '').trim();\nlet out = null;\ntry {\n  const i = bruto.indexOf('{'), j = bruto.lastIndexOf('}');\n  out = JSON.parse(bruto.slice(i, j + 1));\n} catch (e) { out = null; }\nif (!out || typeof out !== 'object') {\n  out = { respuesta: bruto.startsWith('{') ? '' : bruto, estado: 'conversando' };\n}\n\n// 2) Limpieza: emojis, ¿ ¡, espacios, punto final\nconst limpiar = t => String(t || '')\n  .replace(/[\\u{10000}-\\u{10FFFF}]/gu, '')\n  .replace(/[ \\t]{2,}/g, ' ')\n  .replace(/ +([,.!?])/g, '$1')\n  .replace(/[¿¡]/g, '')\n  .replace(/[ \\t]+\\n/g, '\\n')\n  .trim();\nconst sinPuntoFinal = t => t.replace(/(?<!\\.)\\.$/, '').trim();\n\n// 3) Burbujas: se corta por doble salto de linea. Maximo 3; lo que sobra se junta en la primera\nconst partes = limpiar(out.respuesta).split(/\\n\\s*\\n+/).map(x => sinPuntoFinal(x.trim())).filter(Boolean);\nconst sobran = Math.max(0, partes.length - 3);\nconst burbujas = [partes.slice(0, sobran + 1).join('\\n'), ...partes.slice(sobran + 1)].filter(Boolean);\n\nconst handoff = out.estado === 'pide_humano';\nif (handoff && !burbujas.length) burbujas.push('Dale, le paso tu consulta a alguien del club que te escribe en un rato');\n\n// 4) Handoff: etiqueta pide-humano (Chatwoot reemplaza TODAS las etiquetas: se conservan las actuales) y nota privada\nconst labels = [...new Set([...(conv.labels || []), ...(handoff ? [cfg.etiqueta_pide_humano] : [])])];\nconst nota = [\n  'DERIVADO POR EL BOT DE RESERVAS',\n  'Motivo: ' + (limpiar(out.motivo_derivacion) || '-'),\n  'Nombre: ' + (conv.nombre || '-'),\n  'Telefono: ' + conv.telefono,\n].join('\\n');\n\nreturn burbujas.map(texto => ({ json: { conversation_id: Number(conv.conversation_id), texto, handoff, labels, nota } }));"
+      }
+    },
+    {
+      "id": "a0000000-0000-4000-8000-000000000029",
+      "name": "respuesta_error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4000,
+        600
+      ],
+      "parameters": {
+        "jsCode": "// El agente o la API fallaron: avisar a la persona y pasar la charla a alguien del club.\nconst cfg = $('config').first().json;\nconst conv = $('normalizar_entrada').first().json;\nconst err = $input.first().json;\nconst detalle = String((err.error && (err.error.message || err.error)) || err.message || JSON.stringify(err)).slice(0, 500);\nreturn [{ json: {\n  conversation_id: Number(conv.conversation_id),\n  texto: 'Disculpá, tuve un problema técnico. Ya le aviso a alguien del club para que te responda por acá',\n  handoff: true,\n  labels: [...new Set([...(conv.labels || []), cfg.etiqueta_pide_humano])],\n  nota: ['ERROR DEL BOT DE RESERVAS', 'Detalle: ' + detalle, 'Nombre: ' + (conv.nombre || '-'), 'Telefono: ' + conv.telefono].join('\\n'),\n} }];"
+      }
+    },
+    {
+      "id": "a0000000-0000-4000-8000-000000000030",
+      "name": "salida",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        4220,
+        400
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "a0000000-0000-4000-8000-000000000031",
+      "name": "enviar_burbujas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        4440,
+        400
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "nXvRnCfwIvn78KN5",
+          "name": "chatwoot"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('config').first().json.chatwoot_url.replace(/\\/+$/, '') }}/api/v1/accounts/{{ $('config').first().json.account_id }}/conversations/{{ $json.conversation_id }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ content: $json.texto, message_type: 'outgoing', private: false }) }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 1500
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "a0000000-0000-4000-8000-000000000032",
+      "name": "es_handoff",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        4660,
+        400
+      ],
+      "executeOnce": true,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c0000000-0000-4000-8000-000000000007",
+              "leftValue": "={{ $('salida').first().json.handoff }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "a0000000-0000-4000-8000-000000000033",
+      "name": "crear_nota_privada",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        4880,
+        320
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "nXvRnCfwIvn78KN5",
+          "name": "chatwoot"
+        }
+      },
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('config').first().json.chatwoot_url.replace(/\\/+$/, '') }}/api/v1/accounts/{{ $('config').first().json.account_id }}/conversations/{{ $('salida').first().json.conversation_id }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ content: $('salida').first().json.nota, message_type: 'outgoing', private: true }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "a0000000-0000-4000-8000-000000000034",
+      "name": "etiquetar_pide_humano",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        5100,
+        320
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "nXvRnCfwIvn78KN5",
+          "name": "chatwoot"
+        }
+      },
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('config').first().json.chatwoot_url.replace(/\\/+$/, '') }}/api/v1/accounts/{{ $('config').first().json.account_id }}/conversations/{{ $('salida').first().json.conversation_id }}/labels",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ labels: $('salida').first().json.labels }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "a0000000-0000-4000-8000-000000000035",
+      "name": "abrir_conversacion",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        5320,
+        320
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "nXvRnCfwIvn78KN5",
+          "name": "chatwoot"
+        }
+      },
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('config').first().json.chatwoot_url.replace(/\\/+$/, '') }}/api/v1/accounts/{{ $('config').first().json.account_id }}/conversations/{{ $('salida').first().json.conversation_id }}/toggle_status",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ status: 'open' }) }}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "entrada_chatwoot": {
+      "main": [
+        [
+          {
+            "node": "config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "config": {
+      "main": [
+        [
+          {
+            "node": "normalizar_entrada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "normalizar_entrada": {
+      "main": [
+        [
+          {
+            "node": "bot_activo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "bot_activo": {
+      "main": [
+        [
+          {
+            "node": "contexto_club",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "contexto_club": {
+      "main": [
+        [
+          {
+            "node": "club_configurado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "respuesta_error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "club_configurado": {
+      "main": [
+        [
+          {
+            "node": "es_audio",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "ignorar_inbox",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "respuesta_error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "es_audio": {
+      "main": [
+        [
+          {
+            "node": "descargar_audio",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "push_buffer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "descargar_audio": {
+      "main": [
+        [
+          {
+            "node": "preparar_audio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "preparar_audio": {
+      "main": [
+        [
+          {
+            "node": "transcribir_audio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "transcribir_audio": {
+      "main": [
+        [
+          {
+            "node": "push_buffer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "push_buffer": {
+      "main": [
+        [
+          {
+            "node": "leer_buffer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "leer_buffer": {
+      "main": [
+        [
+          {
+            "node": "decidir_buffer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "decidir_buffer": {
+      "main": [
+        [
+          {
+            "node": "cortar_aca",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "borrar_buffer",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "esperar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "esperar": {
+      "main": [
+        [
+          {
+            "node": "leer_buffer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "borrar_buffer": {
+      "main": [
+        [
+          {
+            "node": "unir_mensajes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "unir_mensajes": {
+      "main": [
+        [
+          {
+            "node": "contar_turno",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "contar_turno": {
+      "main": [
+        [
+          {
+            "node": "agente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "agente": {
+      "main": [
+        [
+          {
+            "node": "parsear_salida",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "respuesta_error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "modelo_openai": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "agente",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "memoria": {
+      "ai_memory": [
+        [
+          {
+            "node": "agente",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "consultar_disponibilidad": {
+      "ai_tool": [
+        [
+          {
+            "node": "agente",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "reservar_turno": {
+      "ai_tool": [
+        [
+          {
+            "node": "agente",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "mis_turnos": {
+      "ai_tool": [
+        [
+          {
+            "node": "agente",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "cancelar_turno": {
+      "ai_tool": [
+        [
+          {
+            "node": "agente",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "parsear_salida": {
+      "main": [
+        [
+          {
+            "node": "salida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "respuesta_error": {
+      "main": [
+        [
+          {
+            "node": "salida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "salida": {
+      "main": [
+        [
+          {
+            "node": "enviar_burbujas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "enviar_burbujas": {
+      "main": [
+        [
+          {
+            "node": "es_handoff",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "es_handoff": {
+      "main": [
+        [
+          {
+            "node": "crear_nota_privada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "crear_nota_privada": {
+      "main": [
+        [
+          {
+            "node": "etiquetar_pide_humano",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "etiquetar_pide_humano": {
+      "main": [
+        [
+          {
+            "node": "abrir_conversacion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Argentina/Buenos_Aires"
+  }
+}
