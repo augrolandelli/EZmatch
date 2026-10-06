@@ -64,5 +64,27 @@ curl -H "X-Bot-Key: <BOT_API_KEY>" "https://<dominio-api>/api/bot/context?inboxI
   vincular el inbox al club demo (si ese inbox ya es de otro club, solo avisa en el log).
 - **Clubes nuevos:** se dan de alta desde el panel (menú Clubes, solo SuperAdmin), con su dueño y su inbox
   de Chatwoot. El bot responde en la cuenta de Chatwoot de donde vino cada mensaje (una cuenta por club).
-- **Backups**: el volumen `postgres-data` guarda la base. Programar un `pg_dump` diario
-  (Easypanel → servicio postgres → Backups, o un cron en el VPS).
+
+## Backups
+
+El servicio `backup` del compose hace un `pg_dump` comprimido todos los días a la 01:00 (hora Argentina)
+y guarda los últimos 7 diarios, 4 semanales y 6 mensuales en el volumen `backups`
+(`/backups/daily`, `/weekly`, `/monthly`; `ezmatch-latest.sql.gz` es siempre el último).
+
+- **Hacer uno ahora** (consola del servicio `backup` en Easypanel): `/backup.sh`
+- **Ver los que hay:** `ls -lh /backups/daily`
+- **Restaurar** (reemplaza la base actual; desde la consola del servicio `backup`):
+  ```bash
+  zcat /backups/daily/ezmatch-latest.sql.gz | PGPASSWORD="$POSTGRES_PASSWORD" psql -h ezmatch-db -U ezmatch -d ezmatch
+  ```
+- Los backups viven en el mismo VPS: si se pierde el servidor, se pierden también. Cada tanto conviene
+  bajar uno a la compu (o, más adelante, mandarlos a un almacenamiento externo tipo S3).
+
+## Cambiar la contraseña de Postgres
+
+`POSTGRES_PASSWORD` solo se usa la primera vez que se crea la base; cambiarla en el `.env` no alcanza.
+
+1. Consola del servicio `postgres` en Easypanel:
+   `psql -U ezmatch -d ezmatch -c "ALTER USER ezmatch WITH PASSWORD 'la-nueva-contraseña';"`
+2. En el entorno del proyecto, poner `POSTGRES_PASSWORD` con la misma contraseña nueva.
+3. Deploy (la API y el backup toman la nueva).

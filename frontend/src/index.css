@@ -2,7 +2,7 @@
 
 /*
  * Sistema de diseño de EZmatch.
- * Colores semánticos como variables CSS: el modo oscuro solo redefine las variables.
+ * Colores semánticos como variables CSS. La app es siempre clara (aunque el sistema esté en oscuro).
  * Uso en Tailwind: bg-surface, text-muted, border-line, bg-brand, text-on-brand, etc.
  */
 :root {
@@ -34,35 +34,6 @@
   color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --page: #0c120f;
-    --surface: #131b17;
-    --surface-2: #1a2420;
-    --line: #26332c;
-    --ink: #e8efe9;
-    --muted: #93a39a;
-    --brand: #2fb582;
-    --brand-hover: #43c592;
-    --brand-soft: #143326;
-    --on-brand: #06120c;
-    --danger: #f0735e;
-    --danger-soft: #3a1914;
-    --warn: #f0b04a;
-    --warn-soft: #33250c;
-    --info: #6ea6f5;
-    --info-soft: #12233d;
-    --series-whatsapp: #3987e5;
-    --series-panel: #d95926;
-    /* En oscuro lo bajo se funde con el fondo y lo alto brilla. */
-    --heat-1: #104281;
-    --heat-2: #1c5cab;
-    --heat-3: #3987e5;
-    --heat-4: #86b6ef;
-    --heat-ink-strong: #06120c;
-    color-scheme: dark;
-  }
-}
 
 @theme inline {
   --color-page: var(--page);

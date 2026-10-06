@@ -5,6 +5,7 @@ import { useActiveClub, useAuthStore } from '../../features/auth/authStore'
 import { roleLabel } from '../../features/auth/types'
 import { useLogout } from '../../features/auth/useLogout'
 import { ClubSwitcher } from '../../features/admin/ClubSwitcher'
+import { ActivityBell } from '../../features/activity/ActivityBell'
 import { Logo } from './ui'
 
 interface NavItem {
@@ -36,7 +37,10 @@ export function AppLayout() {
       {/* Barra lateral (computadora) */}
       <aside className="hidden w-64 shrink-0 flex-col border-r border-line bg-surface md:sticky md:top-0 md:flex md:h-dvh">
         <div className="flex flex-col gap-4 border-b border-line p-5">
-          <Logo />
+          <div className="flex items-center justify-between">
+            <Logo />
+            <ActivityBell />
+          </div>
           {isSuperAdmin ? <ClubSwitcher /> : <p className="truncate text-sm font-semibold text-ink">{club?.name}</p>}
         </div>
         <nav className="flex flex-1 flex-col gap-1 p-3" aria-label="Principal">
@@ -72,6 +76,7 @@ export function AppLayout() {
       <header className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-line bg-surface/95 px-4 py-3 backdrop-blur md:hidden">
         <Logo withText={false} />
         <div className="min-w-0 flex-1">{isSuperAdmin ? <ClubSwitcher /> : <p className="truncate text-sm font-semibold">{club?.name}</p>}</div>
+        <ActivityBell align="right" />
       </header>
 
       <main className="min-w-0 flex-1 px-4 pb-24 pt-6 md:px-8 md:pb-10 md:pt-8">

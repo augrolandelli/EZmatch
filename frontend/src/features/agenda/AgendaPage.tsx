@@ -9,6 +9,7 @@ import { addDays, formatLongDate, formatMoney } from '../../shared/format'
 import { getAgenda } from './api'
 import { AgendaGrid } from './AgendaGrid'
 import { NewBookingDialog } from './NewBookingDialog'
+import { AgendaViews } from './AgendaViews'
 import { BookingDialog } from './BookingDialog'
 import type { AgendaCourt, AgendaItem } from './types'
 
@@ -49,6 +50,7 @@ export default function AgendaPage() {
 
   return (
     <>
+      <AgendaViews />
       <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-ink first-letter:uppercase">

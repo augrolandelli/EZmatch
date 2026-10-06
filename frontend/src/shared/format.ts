@@ -59,3 +59,11 @@ const compactMoney = new Intl.NumberFormat('es-AR', { notation: 'compact', maxim
 export function formatMoneyShort(amount: number): string {
   return amount >= 1_000_000 ? `$${compactMoney.format(amount).replace(/\s/g, ' ')}` : formatMoney(amount)
 }
+
+const weekdayShort = new Intl.DateTimeFormat('es-AR', { weekday: 'short' })
+
+/** "2026-10-06" → "mar 6/10" */
+export function formatShortDay(iso: string): string {
+  const date = parseIsoDate(iso)
+  return `${weekdayShort.format(date).replace('.', '')} ${date.getDate()}/${date.getMonth() + 1}`
+}

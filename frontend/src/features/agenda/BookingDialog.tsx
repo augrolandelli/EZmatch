@@ -1,13 +1,14 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { CircleAlert, MessageCircle } from 'lucide-react'
+import { CircleAlert, MessageCircle, Repeat } from 'lucide-react'
 import { Modal } from '../../shared/components/Modal'
 import { Alert, Button, TextField } from '../../shared/components/ui'
 import { apiErrorMessage } from '../../shared/api/client'
-import { formatLongDate, formatMoney, formatPhone, formatTime, whatsappLink } from '../../shared/format'
+import { addDays, formatLongDate, formatMoney, formatPhone, formatTime, whatsappLink } from '../../shared/format'
 import { useActiveClub } from '../auth/authStore'
 import { Badge } from './AgendaGrid'
-import { cancelBooking, setNoShow, setPayment } from './api'
+import { cancelBooking, createFixedBooking, setNoShow, setPayment } from './api'
+import { weekDayOf } from './weekDays'
 import type { AgendaCourt, AgendaItem } from './types'
 
 /** Detalle de una reserva con las acciones del mostrador: cobrar, "no vino" y cancelar. */
@@ -50,9 +51,25 @@ function BookingDetails({ selected, date, now, onClose }: { selected: Selected; 
   const pay = useMutation({ mutationFn: (paid: boolean) => setPayment(booking.id, paid), onSuccess: done })
   const noShow = useMutation({ mutationFn: (value: boolean) => setNoShow(booking.id, value), onSuccess: done })
   const cancel = useMutation({ mutationFn: () => cancelBooking(booking.id, reason.trim() || null), onSuccess: done })
-  const error = pay.error ?? noShow.error ?? cancel.error
-
   const { court, item } = selected
+  // "Repetir todas las semanas": turno fijo desde la semana que viene (esta reserva ya existe).
+  const repeat = useMutation({
+    mutationFn: () =>
+      createFixedBooking({
+        courtId: court.id,
+        dayOfWeek: weekDayOf(date),
+        startTime: item.startTime,
+        phone: booking.customerPhone,
+        customerName: booking.customerName,
+        startsOn: addDays(date, 7),
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['fixed-bookings', club?.id] })
+      done()
+    },
+  })
+  const error = pay.error ?? noShow.error ?? cancel.error ?? repeat.error
+
   const started = Date.parse(item.startsAt) <= now
   const isNoShow = booking.status === 'NoShow'
   const isPaid = booking.paymentStatus === 'Paid'
@@ -62,6 +79,7 @@ function BookingDetails({ selected, date, now, onClose }: { selected: Selected; 
       <div className="flex flex-wrap gap-1.5">
         {isNoShow ? <Badge tone="danger">No vino</Badge> : isPaid ? <Badge tone="success">Pagado</Badge> : <Badge tone="warn">Pendiente de pago</Badge>}
         <Badge tone="neutral">{booking.source === 'WhatsApp' ? 'Reservó por WhatsApp' : 'Reserva del mostrador'}</Badge>
+        {booking.fixedBookingId ? <Badge tone="neutral">Turno fijo</Badge> : null}
       </div>
 
       {booking.customerIsBlocked ? (
@@ -97,7 +115,11 @@ function BookingDetails({ selected, date, now, onClose }: { selected: Selected; 
 
       {confirmingCancel ? (
         <div className="flex flex-col gap-3 rounded-lg border border-danger/40 p-3">
-          <p className="text-sm font-medium text-ink">¿Cancelar esta reserva? El turno queda libre.</p>
+          <p className="text-sm font-medium text-ink">
+            {booking.fixedBookingId
+              ? 'Se cancela solo este día; el turno fijo sigue las otras semanas.'
+              : '¿Cancelar esta reserva? El turno queda libre.'}
+          </p>
           <TextField label="Motivo (opcional)" name="reason" value={reason} onChange={(e) => setReason(e.target.value)} />
           <div className="flex justify-end gap-2">
             <Button variant="ghost" onClick={() => setConfirmingCancel(false)}>
@@ -118,6 +140,11 @@ function BookingDetails({ selected, date, now, onClose }: { selected: Selected; 
           {started ? (
             <Button variant="secondary" loading={noShow.isPending} onClick={() => noShow.mutate(!isNoShow)}>
               {isNoShow ? 'Deshacer "no vino"' : 'No vino'}
+            </Button>
+          ) : null}
+          {!booking.fixedBookingId && !started ? (
+            <Button variant="secondary" loading={repeat.isPending} onClick={() => repeat.mutate()}>
+              <Repeat className="size-4" aria-hidden /> Repetir todas las semanas
             </Button>
           ) : null}
           <Button variant="dangerGhost" className="sm:ml-auto" onClick={() => setConfirmingCancel(true)}>

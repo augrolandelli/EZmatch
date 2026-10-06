@@ -3,6 +3,8 @@ import LoginPage from './features/auth/LoginPage'
 import { RequireAuth, RequireRole } from './features/auth/RequireAuth'
 import { AppLayout } from './shared/components/AppLayout'
 import AgendaPage from './features/agenda/AgendaPage'
+import WeekPage from './features/agenda/WeekPage'
+import FixedBookingsPage from './features/agenda/FixedBookingsPage'
 import DashboardPage from './features/dashboard/DashboardPage'
 import AccountPage from './features/account/AccountPage'
 import ConfigPage from './features/config/ConfigPage'
@@ -18,6 +20,8 @@ export default function App() {
           <Route element={<AppLayout />}>
             <Route index element={<DashboardPage />} />
             <Route path="agenda" element={<AgendaPage />} />
+            <Route path="agenda/semana" element={<WeekPage />} />
+            <Route path="agenda/fijos" element={<FixedBookingsPage />} />
             <Route path="clientes" element={<CustomersPage />} />
             <Route path="cuenta" element={<AccountPage />} />
             <Route element={<RequireRole roles={['Owner', 'SuperAdmin']} />}>
