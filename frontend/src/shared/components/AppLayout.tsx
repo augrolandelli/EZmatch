@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { CalendarDays, LogOut, UserRound } from 'lucide-react'
+import { CalendarDays, LogOut, Settings, UserRound } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useActiveClub, useAuthStore } from '../../features/auth/authStore'
 import { roleLabel } from '../../features/auth/types'
@@ -11,10 +11,13 @@ interface NavItem {
   to: string
   label: string
   icon: LucideIcon
+  /** Roles que ven el ítem (todos si no se indica). */
+  roles?: string[]
 }
 
-const navItems: NavItem[] = [
+const allNavItems: NavItem[] = [
   { to: '/', label: 'Agenda', icon: CalendarDays },
+  { to: '/configuracion', label: 'Configuración', icon: Settings, roles: ['Owner', 'SuperAdmin'] },
   { to: '/cuenta', label: 'Mi cuenta', icon: UserRound },
 ]
 
@@ -23,6 +26,7 @@ export function AppLayout() {
   const club = useActiveClub()
   const onLogout = useLogout()
   const isSuperAdmin = user?.role === 'SuperAdmin'
+  const navItems = allNavItems.filter((i) => !i.roles || (user && i.roles.includes(user.role)))
 
   return (
     <div className="min-h-dvh md:flex">

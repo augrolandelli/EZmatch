@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, Ref } from 'react'
+import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, Ref, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react'
 import { LoaderCircle } from 'lucide-react'
 
 type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'dangerGhost'
@@ -105,5 +105,90 @@ export function PageHeader({ title, subtitle, actions }: { title: string; subtit
       </div>
       {actions}
     </header>
+  )
+}
+
+export function TextArea({
+  label,
+  error,
+  hint,
+  id,
+  ref,
+  ...props
+}: TextareaHTMLAttributes<HTMLTextAreaElement> & { label: string; error?: string; hint?: string; ref?: Ref<HTMLTextAreaElement> }) {
+  const inputId = id ?? props.name
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={inputId} className="text-sm font-medium text-ink">
+        {label}
+      </label>
+      <textarea
+        {...props}
+        id={inputId}
+        ref={ref}
+        aria-invalid={error ? true : undefined}
+        className={`min-h-24 rounded-lg border bg-surface px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/25 ${error ? 'border-danger' : 'border-line'}`}
+      />
+      {error ? <p className="text-xs text-danger">{error}</p> : hint ? <p className="text-xs text-muted">{hint}</p> : null}
+    </div>
+  )
+}
+
+export function SelectField({
+  label,
+  id,
+  ref,
+  children,
+  ...props
+}: SelectHTMLAttributes<HTMLSelectElement> & { label: string; ref?: Ref<HTMLSelectElement> }) {
+  const inputId = id ?? props.name
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={inputId} className="text-sm font-medium text-ink">
+        {label}
+      </label>
+      <select
+        {...props}
+        id={inputId}
+        ref={ref}
+        className="min-h-10 rounded-lg border border-line bg-surface px-2 text-sm text-ink focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/25"
+      >
+        {children}
+      </select>
+    </div>
+  )
+}
+
+export function Checkbox({
+  label,
+  ref,
+  ...props
+}: Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> & { label: ReactNode; ref?: Ref<HTMLInputElement> }) {
+  return (
+    <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-ink">
+      <input {...props} ref={ref} type="checkbox" className="size-4 rounded border-line accent-[var(--brand)]" />
+      {label}
+    </label>
+  )
+}
+
+/** Pestañas simples (botones con aria-selected). */
+export function Tabs<T extends string>({ value, onChange, items }: { value: T; onChange: (v: T) => void; items: { value: T; label: string }[] }) {
+  return (
+    <div role="tablist" className="mb-6 flex gap-1 overflow-x-auto border-b border-line">
+      {items.map((item) => (
+        <button
+          key={item.value}
+          role="tab"
+          aria-selected={item.value === value}
+          onClick={() => onChange(item.value)}
+          className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2.5 text-sm font-medium transition-colors ${
+            item.value === value ? 'border-brand text-brand' : 'border-transparent text-muted hover:text-ink'
+          }`}
+        >
+          {item.label}
+        </button>
+      ))}
+    </div>
   )
 }
