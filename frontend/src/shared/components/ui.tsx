@@ -1,13 +1,14 @@
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, Ref } from 'react'
 import { LoaderCircle } from 'lucide-react'
 
-type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger'
+type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'dangerGhost'
 
 const buttonStyles: Record<ButtonVariant, string> = {
   primary: 'bg-brand text-on-brand hover:bg-brand-hover',
   secondary: 'bg-surface text-ink border border-line hover:bg-surface-2',
   ghost: 'text-ink hover:bg-surface-2',
   danger: 'bg-danger text-white hover:opacity-90',
+  dangerGhost: 'text-danger hover:bg-danger-soft',
 }
 
 export function Button({
