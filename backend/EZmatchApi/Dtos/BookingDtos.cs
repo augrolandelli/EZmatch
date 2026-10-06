@@ -12,7 +12,8 @@ public record CreateBookingRequest(
     TimeOnly StartTime,
     string Phone,
     string? CustomerName = null,
-    Guid? CourtId = null);
+    Guid? CourtId = null,
+    Guid? FixedBookingId = null);
 
 /// <summary>Reserva con fecha/hora expresadas en hora local del club.</summary>
 public record BookingDto(

@@ -73,5 +73,28 @@ services:
       retries: 10
       start_period: 20s
 
+  # Backup diario de la base (pg_dump comprimido). Guarda los últimos 7 días, 4 semanas y 6 meses
+  # en el volumen "backups" (/backups/daily, /weekly, /monthly). Restaurar: ver DEPLOY.md.
+  backup:
+    image: prodrigestivill/postgres-backup-local:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_HOST: ezmatch-db
+      POSTGRES_DB: ezmatch
+      POSTGRES_USER: ezmatch
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_EXTRA_OPTS: "--clean --if-exists --no-owner"
+      SCHEDULE: "0 4 * * *"            # 04:00 UTC = 01:00 Argentina
+      BACKUP_KEEP_DAYS: 7
+      BACKUP_KEEP_WEEKS: 4
+      BACKUP_KEEP_MONTHS: 6
+      HEALTHCHECK_PORT: 8080
+    volumes:
+      - backups:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+
 volumes:
   postgres-data:
+  backups:

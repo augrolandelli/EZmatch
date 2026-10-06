@@ -34,10 +34,12 @@ public class BookingConfiguration : IEntityTypeConfiguration<Booking>
         builder.Property(b => b.PaymentStatus).HasConversion<string>().HasMaxLength(20);
         builder.Property(b => b.Source).HasConversion<string>().HasMaxLength(20);
         builder.Property(b => b.CancelReason).HasMaxLength(300);
+        builder.Property(b => b.CancelledBy).HasConversion<string>().HasMaxLength(20);
         builder.ToTable(t => t.HasCheckConstraint("ck_bookings_range", "ends_at > starts_at"));
 
         builder.HasIndex(b => new { b.ClubId, b.StartsAt });
         builder.HasIndex(b => new { b.CustomerId, b.StartsAt });
+        builder.HasIndex(b => new { b.FixedBookingId, b.StartsAt });
 
         builder.HasOne<Club>()
             .WithMany()
@@ -52,6 +54,38 @@ public class BookingConfiguration : IEntityTypeConfiguration<Booking>
         builder.HasOne(b => b.Customer)
             .WithMany()
             .HasForeignKey(b => b.CustomerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(b => b.FixedBooking)
+            .WithMany()
+            .HasForeignKey(b => b.FixedBookingId)
+            .OnDelete(DeleteBehavior.SetNull);
+    }
+}
+
+public class FixedBookingConfiguration : IEntityTypeConfiguration<FixedBooking>
+{
+    public void Configure(EntityTypeBuilder<FixedBooking> builder)
+    {
+        builder.Property(f => f.Notes).HasMaxLength(300);
+
+        // Un solo turno fijo activo por cancha, día y hora.
+        builder.HasIndex(f => new { f.CourtId, f.DayOfWeek, f.StartTime }).IsUnique().HasFilter("is_active");
+        builder.HasIndex(f => f.ClubId);
+
+        builder.HasOne<Club>()
+            .WithMany()
+            .HasForeignKey(f => f.ClubId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasOne(f => f.Court)
+            .WithMany()
+            .HasForeignKey(f => f.CourtId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(f => f.Customer)
+            .WithMany()
+            .HasForeignKey(f => f.CustomerId)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }

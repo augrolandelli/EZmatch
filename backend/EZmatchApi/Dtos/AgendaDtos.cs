@@ -49,7 +49,25 @@ public record AgendaBookingDto(
     BookingStatus Status,
     PaymentStatus PaymentStatus,
     BookingSource Source,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    Guid? FixedBookingId = null);
+
+/// <summary>Semana de lunes a domingo: por día, las reservas en orden y cuántos turnos quedan libres.</summary>
+public record WeekAgendaDto(DateOnly Start, DateOnly Today, IReadOnlyList<WeekDayDto> Days);
+
+/// <param name="Slots">Turnos de la grilla del día más reservas (aproximado: para la barra de ocupación).</param>
+public record WeekDayDto(DateOnly Date, IReadOnlyList<WeekBookingDto> Bookings, int FreeSlots, int Slots);
+
+public record WeekBookingDto(
+    Guid Id,
+    string CourtName,
+    TimeOnly StartTime,
+    TimeOnly EndTime,
+    string CustomerName,
+    BookingStatus Status,
+    PaymentStatus PaymentStatus,
+    BookingSource Source,
+    bool IsFixed);
 
 /// <param name="PendingAmount">Reservas sin pagar, excluyendo ausencias.</param>
 public record AgendaSummaryDto(int Bookings, int FreeSlots, int NoShows, decimal PaidAmount, decimal PendingAmount);

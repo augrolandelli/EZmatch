@@ -26,6 +26,13 @@ public class Booking
 
     public DateTime? CancelledAt { get; set; }
     public string? CancelReason { get; set; }
+
+    /// <summary>Desde dónde se canceló (para avisarle al club lo que hizo el bot).</summary>
+    public BookingSource? CancelledBy { get; set; }
+
+    /// <summary>Turno fijo que generó esta reserva (null = reserva suelta).</summary>
+    public Guid? FixedBookingId { get; set; }
+    public FixedBooking? FixedBooking { get; set; }
     public DateTime? ReminderSentAt { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

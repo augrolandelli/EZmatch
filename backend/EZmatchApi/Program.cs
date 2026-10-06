@@ -102,6 +102,10 @@ builder.Services.AddScoped<ICustomerService, CustomerService>();
 builder.Services.AddScoped<IClubUserService, ClubUserService>();
 builder.Services.AddScoped<IAdminClubService, AdminClubService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
+builder.Services.AddScoped<IFixedBookingService, FixedBookingService>();
+builder.Services.AddScoped<IActivityService, ActivityService>();
+// Genera las reservas de los turnos fijos (en tests se llama al servicio directamente).
+if (!builder.Environment.IsEnvironment("Testing")) builder.Services.AddHostedService<FixedBookingWorker>();
 
 builder.Services.AddRateLimiter(options =>
 {

@@ -10,6 +10,9 @@ public interface IAgendaService
 {
     /// <summary>Agenda de una fecha local del club (hoy si es null).</summary>
     Task<AgendaDto> GetDayAsync(Guid clubId, DateOnly? date, CancellationToken ct = default);
+
+    /// <summary>Semana de lunes a domingo que contiene <paramref name="date"/> (la actual si es null).</summary>
+    Task<WeekAgendaDto> GetWeekAsync(Guid clubId, DateOnly? date, CancellationToken ct = default);
 }
 
 /// <summary>
@@ -74,7 +77,7 @@ public class AgendaService(EZmatchDbContext db, TimeProvider time) : IAgendaServ
             {
                 items.Add(Item(AgendaItemKind.Booking, b.StartsAt, b.EndsAt, b.Price, new AgendaBookingDto(
                     b.Id, b.CustomerId, b.Customer.Name, b.Customer.Phone, b.Customer.IsBlocked,
-                    b.Price, b.Status, b.PaymentStatus, b.Source, b.CreatedAt)));
+                    b.Price, b.Status, b.PaymentStatus, b.Source, b.CreatedAt, b.FixedBookingId)));
             }
 
             // Bloqueos, recortados al día.
@@ -114,5 +117,35 @@ public class AgendaService(EZmatchDbContext db, TimeProvider time) : IAgendaServ
             PendingAmount: dayBookings.Where(b => b.PaymentStatus == PaymentStatus.Unpaid && b.Status != BookingStatus.NoShow).Sum(b => b.Price));
 
         return new AgendaDto(day, today, courtDtos, summary);
+    }
+
+    /// <inheritdoc />
+    public async Task<WeekAgendaDto> GetWeekAsync(Guid clubId, DateOnly? date, CancellationToken ct = default)
+    {
+        var first = await GetDayAsync(clubId, date, ct);
+        var monday = first.Date.AddDays(-(((int)first.Date.DayOfWeek + 6) % 7));
+
+        var days = new List<WeekDayDto>();
+        for (var i = 0; i < 7; i++)
+        {
+            var day = monday.AddDays(i);
+            var agenda = day == first.Date ? first : await GetDayAsync(clubId, day, ct);
+            var items = agenda.Courts
+                .SelectMany(c => c.Items.Select(item => (Court: c, Item: item)))
+                .ToList();
+            var bookings = items
+                .Where(x => x.Item.Booking is not null)
+                .OrderBy(x => x.Item.StartMinute).ThenBy(x => x.Court.Name)
+                .Select(x => new WeekBookingDto(
+                    x.Item.Booking!.Id, x.Court.Name, x.Item.StartTime, x.Item.EndTime,
+                    x.Item.Booking.CustomerName, x.Item.Booking.Status, x.Item.Booking.PaymentStatus,
+                    x.Item.Booking.Source, x.Item.Booking.FixedBookingId is not null))
+                .ToList();
+            var gridSlots = items.Count(x => x.Item.Kind is AgendaItemKind.Free or AgendaItemKind.Busy)
+                + bookings.Count;
+            days.Add(new WeekDayDto(day, bookings,
+                items.Count(x => x.Item.Kind == AgendaItemKind.Free && !x.Item.IsPast), gridSlots));
+        }
+        return new WeekAgendaDto(monday, first.Today, days);
     }
 }

@@ -19,6 +19,52 @@ public class AgendaController(IAgendaService agenda, ICurrentUser currentUser) :
     [ProducesResponseType(typeof(AgendaDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> Get([FromQuery] DateOnly? date, CancellationToken ct) =>
         Ok(await agenda.GetDayAsync(currentUser.ClubId, date, ct));
+
+    /// <summary>Semana (lunes a domingo) que contiene la fecha indicada, o la actual.</summary>
+    [HttpGet("week")]
+    [ProducesResponseType(typeof(WeekAgendaDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetWeek([FromQuery] DateOnly? date, CancellationToken ct) =>
+        Ok(await agenda.GetWeekAsync(currentUser.ClubId, date, ct));
+}
+
+/// <summary>Turnos fijos semanales: alta (reserva las próximas semanas) y baja (cancela las futuras).</summary>
+[ApiController]
+[Route("api/fixed-bookings")]
+[Authorize(Policy = Policies.ClubStaff)]
+public class FixedBookingsController(IFixedBookingService fixedBookings, ICurrentUser currentUser) : ControllerBase
+{
+    [HttpGet]
+    [ProducesResponseType(typeof(IReadOnlyList<FixedBookingDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> List(CancellationToken ct) =>
+        Ok(await fixedBookings.ListAsync(currentUser.ClubId, ct));
+
+    [HttpPost]
+    [ProducesResponseType(typeof(FixedBookingDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Create(
+        CreateFixedBookingRequest request, [FromServices] IValidator<CreateFixedBookingRequest> validator, CancellationToken ct)
+    {
+        await validator.ValidateAndThrowAsync(request, ct);
+        return StatusCode(StatusCodes.Status201Created, await fixedBookings.CreateAsync(currentUser.ClubId, request, ct));
+    }
+
+    [HttpPost("{id:guid}/end")]
+    [ProducesResponseType(typeof(FixedBookingDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> End(Guid id, CancellationToken ct) =>
+        Ok(await fixedBookings.EndAsync(currentUser.ClubId, id, ct));
+}
+
+/// <summary>Avisos del panel: reservas y cancelaciones que hizo la gente por WhatsApp.</summary>
+[ApiController]
+[Route("api/activity")]
+[Authorize(Policy = Policies.ClubStaff)]
+public class ActivityController(IActivityService activity, ICurrentUser currentUser) : ControllerBase
+{
+    [HttpGet]
+    [ProducesResponseType(typeof(IReadOnlyList<ActivityDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> Get(CancellationToken ct) =>
+        Ok(await activity.GetRecentAsync(currentUser.ClubId, ct));
 }
 
 /// <summary>Métricas de la pantalla de inicio del panel.</summary>

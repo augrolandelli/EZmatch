@@ -79,7 +79,8 @@ public class BookingService(
                 throw AppException.Forbidden("Este número no puede reservar por WhatsApp; tiene que comunicarse con el club.", "customer_blocked");
             }
             var active = await db.Bookings.CountAsync(
-                b => b.CustomerId == customer.Id && b.Status == BookingStatus.Confirmed && b.EndsAt > now, ct);
+                b => b.CustomerId == customer.Id && b.Status == BookingStatus.Confirmed && b.EndsAt > now
+                    && b.FixedBookingId == null, ct);   // los turnos fijos no cuentan para el límite del bot
             if (active >= club.MaxActiveBookingsPerCustomer)
             {
                 throw AppException.Forbidden(
@@ -138,6 +139,8 @@ public class BookingService(
                 EndsAt = slot.EndsAt,
                 Price = slot.Price,
                 Source = source,
+                FixedBookingId = request.FixedBookingId,
+                CreatedAt = now,
             };
             db.Bookings.Add(booking);
 
@@ -220,6 +223,7 @@ public class BookingService(
         booking.Status = BookingStatus.Cancelled;
         booking.CancelledAt = now;
         booking.CancelReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+        booking.CancelledBy = source;
         await db.SaveChangesAsync(ct);
 
         logger.LogInformation("Reserva {BookingId} cancelada ({Source})", booking.Id, source);

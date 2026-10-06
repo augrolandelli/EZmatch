@@ -12,6 +12,7 @@ public class EZmatchDbContext(DbContextOptions<EZmatchDbContext> options) : DbCo
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<Booking> Bookings => Set<Booking>();
     public DbSet<Block> Blocks => Set<Block>();
+    public DbSet<FixedBooking> FixedBookings => Set<FixedBooking>();
     public DbSet<User> Users => Set<User>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
