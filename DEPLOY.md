@@ -8,20 +8,17 @@ WhatsApp → Chatwoot ─webhook→ n8n ─HTTPS + X-Bot-Key→ EZmatch API (.NE
 La API y su Postgres se levantan juntos con `docker-compose.prod.yml`.
 Las migraciones se aplican solas al arrancar.
 
-## 1. Subir el código a GitHub
+## 1. Código en GitHub
 
-Easypanel construye la imagen desde el repo (repo privado).
-
-```bash
-git remote add origin https://github.com/<usuario>/EZmatch.git
-git push -u origin master
-```
+Easypanel construye la imagen desde el repo privado
+[augrolandelli/EZmatch](https://github.com/augrolandelli/EZmatch), rama `main`.
+Cada `git push` a `main` + Deploy en Easypanel publica la versión nueva.
 
 ## 2. Crear el servicio en Easypanel
 
 1. Proyecto nuevo `ezmatch` (o dentro del proyecto existente).
 2. **+ Service → Compose**.
-3. Source: **GitHub** → repo `EZmatch`, rama `master`, archivo `docker-compose.prod.yml`.
+3. Source: **GitHub** → repo `EZmatch`, rama `main`, archivo `docker-compose.prod.yml`.
 4. **Environment** (copiar de `.env.example` y completar):
 
    ```bash
