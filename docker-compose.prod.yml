@@ -2,9 +2,13 @@
 # Uso local (con variables en .env):
 #   docker compose -f docker-compose.prod.yml up -d --build
 #
-# En Easy Panel podés subir este archivo y dejar que el panel levante ambos servicios.
+# En Easy Panel podés subir este archivo y dejar que el panel levante los servicios.
 # Nota: Easy Panel gestiona sus propias redes y nombres de contenedor, por eso no se
 # definen explícitamente aquí.
+#
+# IMPORTANTE: en Easypanel los proyectos comparten una red interna, y nombres genéricos como
+# "api" o "postgres" chocan con servicios de otros proyectos (ej. CalisApp también tiene "api").
+# Por eso los servicios se llaman entre sí SOLO por alias únicos: ezmatch-api y ezmatch-db.
 
 services:
   api:
@@ -14,12 +18,15 @@ services:
     restart: unless-stopped
     expose:
       - "5000"
+    networks:
+      default:
+        aliases: [ezmatch-api]
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       # GSS Encryption Mode=Disable: sin esto Npgsql intenta Kerberos, la imagen no trae
       # libgssapi_krb5 y el proceso termina con código 139.
       ASPNETCORE_URLS: http://+:5000
-      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=ezmatch;Username=ezmatch;Password=${POSTGRES_PASSWORD};GSS Encryption Mode=Disable"
+      ConnectionStrings__DefaultConnection: "Host=ezmatch-db;Port=5432;Database=ezmatch;Username=ezmatch;Password=${POSTGRES_PASSWORD};GSS Encryption Mode=Disable"
       Cors__AllowedOrigins__0: ${FRONTEND_URL}
       Bot__ApiKey: ${BOT_API_KEY}
       Jwt__Key: ${JWT_KEY}
@@ -50,6 +57,9 @@ services:
   postgres:
     image: postgres:17
     restart: unless-stopped
+    networks:
+      default:
+        aliases: [ezmatch-db]
     environment:
       POSTGRES_DB: ezmatch
       POSTGRES_USER: ezmatch
