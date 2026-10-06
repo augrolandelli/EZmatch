@@ -21,6 +21,19 @@ public class AgendaController(IAgendaService agenda, ICurrentUser currentUser) :
         Ok(await agenda.GetDayAsync(currentUser.ClubId, date, ct));
 }
 
+/// <summary>Métricas de la pantalla de inicio del panel.</summary>
+[ApiController]
+[Route("api/dashboard")]
+[Authorize(Policy = Policies.ClubStaff)]
+public class DashboardController(IDashboardService dashboard, ICurrentUser currentUser) : ControllerBase
+{
+    /// <summary>Hoy + los últimos 7, 30 o 90 días contra el período anterior.</summary>
+    [HttpGet]
+    [ProducesResponseType(typeof(DashboardDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> Get([FromQuery] int days = 30, CancellationToken ct = default) =>
+        Ok(await dashboard.GetAsync(currentUser.ClubId, days, ct));
+}
+
 /// <summary>Reservas desde el mostrador: alta manual, cobro, ausencia y cancelación.</summary>
 [ApiController]
 [Route("api/bookings")]
