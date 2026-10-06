@@ -22,6 +22,7 @@ export interface ClubSettings {
   timeZone: string
   assistantName: string | null
   botInstructions: string | null
+  botShowsPrices: boolean
   cancellationMinHours: number
   minLeadMinutes: number
   bookingHorizonDays: number

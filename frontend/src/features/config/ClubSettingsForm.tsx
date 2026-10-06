@@ -3,7 +3,7 @@ import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Bot } from 'lucide-react'
-import { Alert, Button, Card, TextArea, TextField } from '../../shared/components/ui'
+import { Alert, Button, Card, Checkbox, TextArea, TextField } from '../../shared/components/ui'
 import { apiErrorMessage } from '../../shared/api/client'
 import { useActiveClub } from '../auth/authStore'
 import { getSettings, updateSettings } from './api'
@@ -18,6 +18,7 @@ const schema = z.object({
   phone: z.string().max(20),
   assistantName: z.string().max(40, 'Máximo 40 caracteres.'),
   botInstructions: z.string().max(2000, 'Máximo 2000 caracteres.'),
+  botShowsPrices: z.boolean(),
   cancellationMinHours: int(0, 168, 'Entre 0 y 168 horas.'),
   minLeadMinutes: int(0, 1440, 'Entre 0 y 1440 minutos.'),
   bookingHorizonDays: int(1, 90, 'Entre 1 y 90 días.'),
@@ -31,6 +32,7 @@ const toForm = (s: ClubSettings): FormValues => ({
   phone: s.phone ?? '',
   assistantName: s.assistantName ?? '',
   botInstructions: s.botInstructions ?? '',
+  botShowsPrices: s.botShowsPrices,
   cancellationMinHours: s.cancellationMinHours,
   minLeadMinutes: s.minLeadMinutes,
   bookingHorizonDays: s.bookingHorizonDays,
@@ -97,6 +99,12 @@ export function ClubSettingsForm() {
           error={errors.botInstructions?.message}
           hint="Lo que el bot puede contarle a los clientes además de turnos y precios. No inventa nada fuera de esto."
         />
+        <div className="flex flex-col gap-1">
+          <Checkbox label="Informar precios por WhatsApp" {...register('botShowsPrices')} />
+          <p className="pl-6 text-xs text-muted">
+            Apagado, el bot no dice cuánto sale el turno: si le preguntan, responde que el valor se lo pasan en el club.
+          </p>
+        </div>
       </Card>
 
       <Card className="flex flex-col gap-4">

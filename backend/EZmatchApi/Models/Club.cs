@@ -28,6 +28,9 @@ public class Club
     /// <summary>Nombre con el que se presenta el bot (ej. "Mati"). Null = "el asistente de reservas".</summary>
     public string? AssistantName { get; set; }
 
+    /// <summary>Si el bot informa precios por WhatsApp. Apagado: no los dice y, si preguntan, que se consulten en el club.</summary>
+    public bool BotShowsPrices { get; set; }
+
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

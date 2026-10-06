@@ -13,6 +13,7 @@ public record ClubSettingsDto(
     string TimeZone,
     string? AssistantName,
     string? BotInstructions,
+    bool BotShowsPrices,
     int CancellationMinHours,
     int MinLeadMinutes,
     int BookingHorizonDays,
@@ -30,7 +31,8 @@ public record UpdateClubSettingsRequest(
     int CancellationMinHours,
     int MinLeadMinutes,
     int BookingHorizonDays,
-    int MaxActiveBookingsPerCustomer);
+    int MaxActiveBookingsPerCustomer,
+    bool BotShowsPrices = false);
 
 public class UpdateClubSettingsRequestValidator : AbstractValidator<UpdateClubSettingsRequest>
 {

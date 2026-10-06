@@ -12,13 +12,14 @@ public class BotApiTests(ApiFixture fixture)
     // ApiFixture.Now = lunes 2026-10-05 09:00 hora Argentina.
     private const string Phone = "+5493415550001";
 
-    private async Task<(Club Club, int InboxId)> CreateClubAsync(int padelCourts = 3)
+    private async Task<(Club Club, int InboxId)> CreateClubAsync(int padelCourts = 3, bool showPrices = true)
     {
         var inboxId = ApiFixture.NextInboxId();
         var club = await fixture.CreateClubAsync(padelCourts, c =>
         {
             c.Name = "Pádel Test";
             c.ChatwootInboxId = inboxId;
+            c.BotShowsPrices = showPrices;
         });
         return (club, inboxId);
     }
@@ -168,5 +169,33 @@ public class BotApiTests(ApiFixture fixture)
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
         Assert.Equal("customer_name_required", (await JsonAsync(response)).GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task PricesHidden_NoAmountAnywhereTheAiCanRead()
+    {
+        var (_, inboxId) = await CreateClubAsync(padelCourts: 1, showPrices: false);
+        var client = fixture.BotClient();
+
+        var context = await JsonAsync(await client.GetAsync($"/api/bot/context?inboxId={inboxId}"));
+        var availability = await JsonAsync(await client.GetAsync($"/api/bot/availability?inboxId={inboxId}&date=mañana&from=20&to=20"));
+        var created = await JsonAsync(await client.PostAsJsonAsync("/api/bot/bookings", BookingBody(inboxId)));
+        var conflict = await client.PostAsJsonAsync("/api/bot/bookings", BookingBody(inboxId, "+5493415550002", "20:00", "Lucía"));
+        var list = await JsonAsync(await client.GetAsync($"/api/bot/bookings?inboxId={inboxId}&phone=%2B5493415550001"));
+
+        Assert.Contains("Los precios no se informan por WhatsApp", context.GetProperty("summary").GetString());
+        Assert.Equal("• 20:00 a 21:30 — 1 cancha libre (Cancha 1 techada)", availability.GetProperty("summary").GetString()!.Split('\n')[1]);
+        Assert.Equal(0, availability.GetProperty("slots").GetArrayLength());
+        Assert.EndsWith("a nombre de Juan. Se paga en el club.", created.GetProperty("summary").GetString());
+        Assert.Equal(JsonValueKind.Null, created.GetProperty("booking").GetProperty("price").ValueKind);
+        foreach (var text in new[]
+        {
+            context.ToString(), availability.ToString(), created.ToString(), list.ToString(), await conflict.Content.ReadAsStringAsync(),
+        })
+        {
+            Assert.DoesNotContain("$", text);
+            Assert.DoesNotContain("30000", text);
+            Assert.DoesNotContain("24000", text);
+        }
     }
 }

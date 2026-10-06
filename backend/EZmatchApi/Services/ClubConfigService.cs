@@ -63,6 +63,7 @@ public class ClubConfigService(EZmatchDbContext db, TimeProvider time) : IClubCo
         club.Phone = Clean(r.Phone);
         club.AssistantName = Clean(r.AssistantName);
         club.BotInstructions = Clean(r.BotInstructions);
+        club.BotShowsPrices = r.BotShowsPrices;
         club.CancellationMinHours = r.CancellationMinHours;
         club.MinLeadMinutes = r.MinLeadMinutes;
         club.BookingHorizonDays = r.BookingHorizonDays;
@@ -331,7 +332,7 @@ public class ClubConfigService(EZmatchDbContext db, TimeProvider time) : IClubCo
     private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private static ClubSettingsDto ToDto(Club c) => new(
-        c.Id, c.Name, c.Address, c.Phone, c.TimeZone, c.AssistantName, c.BotInstructions,
+        c.Id, c.Name, c.Address, c.Phone, c.TimeZone, c.AssistantName, c.BotInstructions, c.BotShowsPrices,
         c.CancellationMinHours, c.MinLeadMinutes, c.BookingHorizonDays, c.MaxActiveBookingsPerCustomer,
         c.ChatwootAccountId, c.ChatwootInboxId);
 

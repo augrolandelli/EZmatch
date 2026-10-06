@@ -54,8 +54,8 @@ public class BotService(
                     BotText.SportLabel(g.Key),
                     g.Select(c => $"{c.Name} ({BotText.Covered(c.IsCovered)})").ToList(),
                     templates.Select(t => t.DurationMinutes).Distinct().Order().ToList(),
-                    templates.Count == 0 ? 0 : templates.Min(t => t.Price),
-                    templates.Count == 0 ? 0 : templates.Max(t => t.Price));
+                    !club.BotShowsPrices || templates.Count == 0 ? null : templates.Min(t => t.Price),
+                    !club.BotShowsPrices || templates.Count == 0 ? null : templates.Max(t => t.Price));
             })
             .ToList();
 
@@ -75,13 +75,15 @@ public class BotService(
         foreach (var s in sports)
         {
             var durations = string.Join(" o ", s.DurationsMinutes.Select(d => $"{d} min"));
-            var price = s.MinPrice == s.MaxPrice
-                ? BotText.Money(s.MinPrice)
-                : $"{BotText.Money(s.MinPrice)} a {BotText.Money(s.MaxPrice)} según el horario";
-            sb.AppendLine($"- {s.Label} (valor para herramientas: \"{s.Sport}\"): {string.Join(", ", s.Courts)}. Turnos de {durations}. Precio por turno: {price}.");
+            var price = s.MinPrice is not { } min || s.MaxPrice is not { } max ? ""
+                : min == max ? $" Precio por turno: {BotText.Money(min)}."
+                : $" Precio por turno: {BotText.Money(min)} a {BotText.Money(max)} según el horario.";
+            sb.AppendLine($"- {s.Label} (valor para herramientas: \"{s.Sport}\"): {string.Join(", ", s.Courts)}. Turnos de {durations}.{price}");
         }
         sb.AppendLine("Políticas:");
         sb.AppendLine("- El turno se paga en el club al terminar. No se pide seña.");
+        if (!club.BotShowsPrices)
+            sb.AppendLine("- Los precios no se informan por WhatsApp. Si preguntan cuánto sale, decir que el valor se lo pasan en el club.");
         sb.AppendLine($"- Por WhatsApp se reserva con al menos {club.MinLeadMinutes} minutos y hasta {club.BookingHorizonDays} días de anticipación.");
         sb.AppendLine($"- Máximo {club.MaxActiveBookingsPerCustomer} reservas activas por persona por WhatsApp.");
         sb.AppendLine($"- Por WhatsApp se cancela con al menos {club.CancellationMinHours} horas de anticipación; si falta menos, derivar a una persona del club.");
@@ -123,12 +125,12 @@ public class BotService(
             foreach (var group in slots.GroupBy(s => s.Sport))
             {
                 sb.AppendLine($"{Capitalize(BotText.SportLabel(group.Key))} — {dayLabel}:");
-                foreach (var slot in group) sb.AppendLine("• " + SlotLine(slot));
+                foreach (var slot in group) sb.AppendLine("• " + SlotLine(slot, club.BotShowsPrices));
             }
             summary = sb.ToString().ReplaceLineEndings("\n").TrimEnd();
         }
 
-        return new BotAvailabilityDto(BotText.Iso(day), slots, summary);
+        return new BotAvailabilityDto(BotText.Iso(day), club.BotShowsPrices ? slots : [], summary);
     }
 
     /// <inheritdoc />
@@ -154,15 +156,16 @@ public class BotService(
             // Se reescribe el mensaje para que el bot pueda ofrecer opciones sin otra llamada.
             var options = alternatives.Count == 0
                 ? $" No quedan otros turnos libres ese día."
-                : " Opciones cercanas: " + string.Join("; ", alternatives.Select(SlotLine)) + ".";
-            throw new AppException(ex.Message + options, ex.StatusCode, ex.Code) { Details = ex.Details };
+                : " Opciones cercanas: " + string.Join("; ", alternatives.Select(s => SlotLine(s, club.BotShowsPrices))) + ".";
+            throw new AppException(ex.Message + options, ex.StatusCode, ex.Code) { Details = club.BotShowsPrices ? ex.Details : null };
         }
 
         var summary =
             $"Reserva confirmada: {BotText.SportLabel(booking.Sport)}, {BotText.RelativeDay(booking.Date, today)} " +
             $"de {BotText.Time(booking.StartTime)} a {BotText.Time(booking.EndTime)} en {booking.CourtName}, " +
-            $"a nombre de {booking.CustomerName}. Precio: {BotText.Money(booking.Price)} (se paga en el club).";
-        return new BotBookingResultDto(booking, summary);
+            $"a nombre de {booking.CustomerName}." +
+            (club.BotShowsPrices ? $" Precio: {BotText.Money(booking.Price)} (se paga en el club)." : " Se paga en el club.");
+        return new BotBookingResultDto(BotBookingDto.From(booking, club.BotShowsPrices), summary);
     }
 
     /// <inheritdoc />
@@ -176,8 +179,9 @@ public class BotService(
             ? "No tiene reservas activas."
             : "Reservas activas:\n" + string.Join("\n", upcoming.Select(b =>
                 $"• {BotText.SportLabel(b.Sport)}, {BotText.RelativeDay(b.Date, today)} de {BotText.Time(b.StartTime)} " +
-                $"a {BotText.Time(b.EndTime)} en {b.CourtName} — {BotText.Money(b.Price)} (id: {b.Id})"));
-        return new BotBookingsDto(upcoming, summary);
+                $"a {BotText.Time(b.EndTime)} en {b.CourtName}" +
+                (club.BotShowsPrices ? $" — {BotText.Money(b.Price)}" : "") + $" (id: {b.Id})"));
+        return new BotBookingsDto(upcoming.Select(b => BotBookingDto.From(b, club.BotShowsPrices)).ToList(), summary);
     }
 
     /// <inheritdoc />
@@ -190,7 +194,7 @@ public class BotService(
         var summary =
             $"Reserva cancelada: {BotText.SportLabel(booking.Sport)}, {BotText.RelativeDay(booking.Date, today)} " +
             $"de {BotText.Time(booking.StartTime)} a {BotText.Time(booking.EndTime)} en {booking.CourtName}.";
-        return new BotBookingResultDto(booking, summary);
+        return new BotBookingResultDto(BotBookingDto.From(booking, club.BotShowsPrices), summary);
     }
 
     private async Task<Club> ResolveClubAsync(int inboxId, CancellationToken ct) =>
@@ -210,16 +214,18 @@ public class BotService(
         return (DateOnly.FromDateTime(local), TimeOnly.FromDateTime(local));
     }
 
-    /// <summary>"20:00 a 21:30 — 2 canchas libres (Cancha 1 techada, Cancha 3 descubierta) — $30.000".</summary>
-    private static string SlotLine(AvailableSlotDto slot)
+    /// <summary>"20:00 a 21:30 — 2 canchas libres (Cancha 1 techada, Cancha 3 descubierta) — $30.000" (precio solo si el club lo muestra).</summary>
+    private static string SlotLine(AvailableSlotDto slot, bool showPrice)
     {
         var courts = string.Join(", ", slot.Courts.Select(c => $"{c.Name} {BotText.Covered(c.IsCovered)}"));
         var count = slot.Courts.Count == 1 ? "1 cancha libre" : $"{slot.Courts.Count} canchas libres";
+        var line = $"{BotText.Time(slot.StartTime)} a {BotText.Time(slot.EndTime)} — {count} ({courts})";
+        if (!showPrice) return line;
         var maxPrice = slot.Courts.Max(c => c.Price);
         var price = maxPrice == slot.PriceFrom
             ? BotText.Money(slot.PriceFrom)
             : $"desde {BotText.Money(slot.PriceFrom)}";
-        return $"{BotText.Time(slot.StartTime)} a {BotText.Time(slot.EndTime)} — {count} ({courts}) — {price}";
+        return $"{line} — {price}";
     }
 
     private static string Capitalize(string text) => text.Length == 0 ? text : char.ToUpperInvariant(text[0]) + text[1..];
