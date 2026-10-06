@@ -22,6 +22,13 @@ services:
       ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=ezmatch;Username=ezmatch;Password=${POSTGRES_PASSWORD};GSS Encryption Mode=Disable"
       Cors__AllowedOrigins__0: ${FRONTEND_URL}
       Bot__ApiKey: ${BOT_API_KEY}
+      Jwt__Key: ${JWT_KEY}
+      # SuperAdmin inicial (solo se crea si no existe ninguno).
+      AdminSeed__Email: ${ADMIN_EMAIL}
+      AdminSeed__Password: ${ADMIN_PASSWORD}
+      # Dueño del club demo para probar el panel (opcional).
+      Seed__DemoOwnerEmail: ${SEED_DEMO_OWNER_EMAIL:-}
+      Seed__DemoOwnerPassword: ${SEED_DEMO_OWNER_PASSWORD:-}
       # Club demo para probar el bot antes de tener el panel (Fase 2). Desactivar con un club real.
       Seed__DemoClub: ${SEED_DEMO_CLUB:-false}
       Seed__ChatwootInboxId: ${SEED_CHATWOOT_INBOX_ID:-}

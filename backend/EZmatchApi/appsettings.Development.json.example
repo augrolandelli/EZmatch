@@ -15,6 +15,15 @@
     "ApiKey": "dev-only-bot-key-cambiar-en-produccion-0123456789"
   },
   "Seed": {
-    "ChatwootInboxId": "1"
+    "ChatwootInboxId": "1",
+    "DemoOwnerEmail": "dueno@padeldemo.local",
+    "DemoOwnerPassword": "Demo1234!"
+  },
+  "Jwt": {
+    "Key": "dev-only-jwt-key-cambiar-en-produccion-0123456789abcdef"
+  },
+  "AdminSeed": {
+    "Email": "admin@ezmatch.local",
+    "Password": "Admin1234!"
   }
 }

@@ -12,7 +12,7 @@ namespace EZmatchApi.Data;
 /// </summary>
 public static class DbSeeder
 {
-    private const string DemoSlug = "padel-demo";
+    public const string DemoSlug = "padel-demo";
 
     /// <param name="chatwootInboxId">Inbox de Chatwoot a vincular con el club demo (se actualiza si ya existe).</param>
     public static async Task SeedAsync(EZmatchDbContext db, TimeProvider time, int? chatwootInboxId, ILogger logger)

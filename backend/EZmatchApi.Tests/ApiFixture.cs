@@ -1,3 +1,4 @@
+using EZmatchApi.Auth;
 using EZmatchApi.Data;
 using EZmatchApi.Models;
 using EZmatchApi.Services;
@@ -60,6 +61,8 @@ public class ApiFixture : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseSetting("ConnectionStrings:DefaultConnection", _postgres.GetConnectionString());
         builder.UseSetting("Serilog:MinimumLevel:Default", "Warning");
         builder.UseSetting("Bot:ApiKey", BotKey);
+        builder.UseSetting("Jwt:Key", "test-jwt-key-0123456789abcdef0123456789abcdef");
+        builder.UseSetting("RateLimit:LoginPerMinute", "10000");
         builder.ConfigureServices(services =>
         {
             services.RemoveAll<TimeProvider>();
@@ -76,6 +79,39 @@ public class ApiFixture : WebApplicationFactory<Program>, IAsyncLifetime
 
     public Task RunAsync(Func<IServiceProvider, Task> action) =>
         RunAsync<object?>(async sp => { await action(sp); return null; });
+
+    public const string DefaultPassword = "Clave1234!";
+
+    /// <summary>Usuario del panel. Para Owner/Staff hace falta <paramref name="clubId"/>.</summary>
+    public async Task<User> CreateUserAsync(UserRole role, Guid? clubId = null, string password = DefaultPassword, bool isActive = true)
+    {
+        var user = new User
+        {
+            Email = $"{role.ToString().ToLowerInvariant()}-{Guid.NewGuid():N}@test.local",
+            FullName = $"Test {role}",
+            PasswordHash = new PasswordHasher().Hash(password),
+            Role = role,
+            ClubId = clubId,
+            IsActive = isActive,
+        };
+        await RunAsync(async sp =>
+        {
+            var db = sp.GetRequiredService<EZmatchDbContext>();
+            db.Users.Add(user);
+            await db.SaveChangesAsync();
+        });
+        return user;
+    }
+
+    /// <summary>Cliente HTTP autenticado como <paramref name="user"/> (y operando <paramref name="clubId"/> si es SuperAdmin).</summary>
+    public HttpClient ClientFor(User user, Guid? clubId = null)
+    {
+        var client = CreateClient();
+        var token = Services.GetRequiredService<ITokenService>().CreateAccessToken(user).Token;
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        if (clubId is not null) client.DefaultRequestHeaders.Add(CurrentUser.ClubHeader, clubId.ToString());
+        return client;
+    }
 
     /// <summary>Club nuevo con <paramref name="padelCourts"/> canchas de pádel con la grilla dada (o la default).</summary>
     public async Task<Club> CreateClubAsync(
