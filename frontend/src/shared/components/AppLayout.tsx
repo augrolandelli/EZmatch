@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { Building2, CalendarDays, LogOut, Settings, UserRound, Users } from 'lucide-react'
+import { Building2, CalendarDays, LayoutDashboard, LogOut, Settings, UserRound, Users } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useActiveClub, useAuthStore } from '../../features/auth/authStore'
 import { roleLabel } from '../../features/auth/types'
@@ -16,7 +16,8 @@ interface NavItem {
 }
 
 const allNavItems: NavItem[] = [
-  { to: '/', label: 'Agenda', icon: CalendarDays },
+  { to: '/', label: 'Inicio', icon: LayoutDashboard },
+  { to: '/agenda', label: 'Agenda', icon: CalendarDays },
   { to: '/clientes', label: 'Clientes', icon: Users },
   { to: '/configuracion', label: 'Configuración', icon: Settings, roles: ['Owner', 'SuperAdmin'] },
   { to: '/cuenta', label: 'Mi cuenta', icon: UserRound },
@@ -33,7 +34,7 @@ export function AppLayout() {
   return (
     <div className="min-h-dvh md:flex">
       {/* Barra lateral (computadora) */}
-      <aside className="hidden w-64 shrink-0 flex-col border-r border-line bg-surface md:flex">
+      <aside className="hidden w-64 shrink-0 flex-col border-r border-line bg-surface md:sticky md:top-0 md:flex md:h-dvh">
         <div className="flex flex-col gap-4 border-b border-line p-5">
           <Logo />
           {isSuperAdmin ? <ClubSwitcher /> : <p className="truncate text-sm font-semibold text-ink">{club?.name}</p>}

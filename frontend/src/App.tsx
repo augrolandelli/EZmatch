@@ -3,6 +3,7 @@ import LoginPage from './features/auth/LoginPage'
 import { RequireAuth, RequireRole } from './features/auth/RequireAuth'
 import { AppLayout } from './shared/components/AppLayout'
 import AgendaPage from './features/agenda/AgendaPage'
+import DashboardPage from './features/dashboard/DashboardPage'
 import AccountPage from './features/account/AccountPage'
 import ConfigPage from './features/config/ConfigPage'
 import CustomersPage from './features/customers/CustomersPage'
@@ -15,7 +16,8 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route element={<RequireAuth />}>
           <Route element={<AppLayout />}>
-            <Route index element={<AgendaPage />} />
+            <Route index element={<DashboardPage />} />
+            <Route path="agenda" element={<AgendaPage />} />
             <Route path="clientes" element={<CustomersPage />} />
             <Route path="cuenta" element={<AccountPage />} />
             <Route element={<RequireRole roles={['Owner', 'SuperAdmin']} />}>

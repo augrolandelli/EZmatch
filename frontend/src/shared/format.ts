@@ -47,3 +47,15 @@ export function formatPhone(phone: string): string {
 export function whatsappLink(phone: string): string {
   return `https://wa.me/${phone.replace(/\D/g, '')}`
 }
+
+/** 0.4567 → "46%" */
+export function formatPercent(ratio: number): string {
+  return `${Math.round(ratio * 100)}%`
+}
+
+const compactMoney = new Intl.NumberFormat('es-AR', { notation: 'compact', maximumFractionDigits: 1 })
+
+/** $19.805.000 → "$19,8 M"; montos chicos, completos. */
+export function formatMoneyShort(amount: number): string {
+  return amount >= 1_000_000 ? `$${compactMoney.format(amount).replace(/\s/g, ' ')}` : formatMoney(amount)
+}
