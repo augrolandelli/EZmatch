@@ -97,6 +97,7 @@ builder.Services.AddScoped<IBotService, BotService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IAgendaService, AgendaService>();
 builder.Services.AddScoped<IPanelBookingService, PanelBookingService>();
+builder.Services.AddScoped<IClubConfigService, ClubConfigService>();
 
 builder.Services.AddRateLimiter(options =>
 {

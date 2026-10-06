@@ -16,9 +16,11 @@ public record BotCreateBookingRequest(
 
 public record BotCancelBookingRequest(int InboxId, string Phone, string? Reason = null);
 
+/// <param name="AssistantName">Nombre con el que se presenta el bot en este club (null = genérico).</param>
 public record BotContextDto(
     Guid ClubId,
     string ClubName,
+    string? AssistantName,
     string Today,
     string Now,
     IReadOnlyList<BotSportDto> Sports,

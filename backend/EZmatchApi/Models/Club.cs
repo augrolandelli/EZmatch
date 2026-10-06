@@ -25,6 +25,9 @@ public class Club
     /// <summary>Instrucciones extra del club para el prompt del bot (ej. "se alquilan paletas").</summary>
     public string? BotInstructions { get; set; }
 
+    /// <summary>Nombre con el que se presenta el bot (ej. "Mati"). Null = "el asistente de reservas".</summary>
+    public string? AssistantName { get; set; }
+
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

@@ -14,6 +14,7 @@ public class ClubConfiguration : IEntityTypeConfiguration<Club>
         builder.Property(c => c.Phone).HasMaxLength(20);
         builder.Property(c => c.TimeZone).HasMaxLength(60);
         builder.Property(c => c.BotInstructions).HasMaxLength(2000);
+        builder.Property(c => c.AssistantName).HasMaxLength(40);
 
         builder.HasIndex(c => c.Slug).IsUnique();
         // Un inbox de Chatwoot pertenece a un único club.

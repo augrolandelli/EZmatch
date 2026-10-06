@@ -61,6 +61,7 @@ public class BotService(
 
         var sb = new StringBuilder();
         sb.AppendLine($"Club: {club.Name}");
+        if (!string.IsNullOrWhiteSpace(club.AssistantName)) sb.AppendLine($"Nombre del asistente: {club.AssistantName}");
         if (club.Address is not null) sb.AppendLine($"Dirección: {club.Address}");
         if (club.Phone is not null) sb.AppendLine($"Teléfono del club: {club.Phone}");
         sb.AppendLine($"Fecha y hora actual: {BotText.Day(today)}/{today.Year} {BotText.Time(nowLocal)}");
@@ -90,7 +91,8 @@ public class BotService(
             sb.AppendLine(club.BotInstructions.Trim());
         }
 
-        return new BotContextDto(club.Id, club.Name, BotText.Iso(today), BotText.Time(nowLocal), sports, sb.ToString().ReplaceLineEndings("\n").TrimEnd());
+        return new BotContextDto(club.Id, club.Name, club.AssistantName, BotText.Iso(today), BotText.Time(nowLocal), sports,
+            sb.ToString().ReplaceLineEndings("\n").TrimEnd());
     }
 
     /// <inheritdoc />
