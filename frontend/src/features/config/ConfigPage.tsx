@@ -4,14 +4,15 @@ import { useActiveClub } from '../auth/authStore'
 import { ClubSettingsForm } from './ClubSettingsForm'
 import { CourtsSection } from './CourtsSection'
 import { BlocksSection } from './BlocksSection'
+import { UsersSection } from './UsersSection'
 
-type Section = 'club' | 'canchas' | 'bloqueos'
+type Section = 'club' | 'canchas' | 'bloqueos' | 'usuarios'
 
 /** Configuración del club (dueño o SuperAdmin). La sección elegida queda en la URL. */
 export default function ConfigPage() {
   const club = useActiveClub()
   const [params, setParams] = useSearchParams()
-  const section = (['club', 'canchas', 'bloqueos'] as Section[]).find((s) => s === params.get('seccion')) ?? 'canchas'
+  const section = (['club', 'canchas', 'bloqueos', 'usuarios'] as Section[]).find((s) => s === params.get('seccion')) ?? 'canchas'
 
   if (!club) {
     return (
@@ -32,9 +33,18 @@ export default function ConfigPage() {
           { value: 'canchas', label: 'Canchas y horarios' },
           { value: 'bloqueos', label: 'Bloqueos' },
           { value: 'club', label: 'Club y bot' },
+          { value: 'usuarios', label: 'Usuarios' },
         ]}
       />
-      {section === 'club' ? <ClubSettingsForm key={club.id} /> : section === 'bloqueos' ? <BlocksSection key={club.id} /> : <CourtsSection key={club.id} />}
+      {section === 'club' ? (
+        <ClubSettingsForm key={club.id} />
+      ) : section === 'bloqueos' ? (
+        <BlocksSection key={club.id} />
+      ) : section === 'usuarios' ? (
+        <UsersSection key={club.id} />
+      ) : (
+        <CourtsSection key={club.id} />
+      )}
     </>
   )
 }

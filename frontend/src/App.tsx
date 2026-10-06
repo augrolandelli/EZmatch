@@ -5,6 +5,7 @@ import { AppLayout } from './shared/components/AppLayout'
 import AgendaPage from './features/agenda/AgendaPage'
 import AccountPage from './features/account/AccountPage'
 import ConfigPage from './features/config/ConfigPage'
+import CustomersPage from './features/customers/CustomersPage'
 
 export default function App() {
   return (
@@ -14,6 +15,7 @@ export default function App() {
         <Route element={<RequireAuth />}>
           <Route element={<AppLayout />}>
             <Route index element={<AgendaPage />} />
+            <Route path="clientes" element={<CustomersPage />} />
             <Route path="cuenta" element={<AccountPage />} />
             <Route element={<RequireRole roles={['Owner', 'SuperAdmin']} />}>
               <Route path="configuracion" element={<ConfigPage />} />
