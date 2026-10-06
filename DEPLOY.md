@@ -2,10 +2,12 @@
 
 ```
 WhatsApp → Chatwoot ─webhook→ n8n ─HTTPS + X-Bot-Key→ EZmatch API (.NET) → PostgreSQL
-                                     (mismo VPS, Easypanel)
+Panel (navegador) ──HTTPS──► web (nginx) ──/api──────────────┘
+                     (todo en el mismo VPS, Easypanel)
 ```
 
-La API y su Postgres se levantan juntos con `docker-compose.prod.yml`.
+`docker-compose.prod.yml` levanta tres servicios: `api`, `postgres` y `web` (panel: nginx que
+sirve el frontend y proxea `/api` a la API, así panel y API comparten dominio y no hay CORS).
 Las migraciones se aplican solas al arrancar.
 
 ## 1. Código en GitHub
@@ -27,10 +29,16 @@ Cada `git push` a `main` + Deploy en Easypanel publica la versión nueva.
    FRONTEND_URL=https://panel.ezmatch.app   # todavía no hay panel: cualquier URL sirve
    SEED_DEMO_CLUB=true                      # crea "Pádel Demo" para probar el bot
    SEED_CHATWOOT_INBOX_ID=<id del inbox de prueba en Chatwoot>
+   JWT_KEY=<openssl rand -base64 48>         # firma de las sesiones del panel
+   ADMIN_EMAIL=<tu email de login>          # SuperAdmin, se crea solo la primera vez
+   ADMIN_PASSWORD=<contraseña>
+   SEED_DEMO_OWNER_EMAIL=<opcional>         # dueño del club demo para probar el panel
+   SEED_DEMO_OWNER_PASSWORD=<opcional>
    ```
 
-5. **Domains**: asignar un dominio al servicio `api`, puerto **5000**, con HTTPS.
-   Ej.: `https://ezmatch-api.<tu-subdominio>.easypanel.host`.
+5. **Domains** (dos dominios, ambos con HTTPS):
+   - API (la usa n8n): servicio compose **`api`**, puerto **5000**. Ej. `ezmatch-backend.<sub>.easypanel.host`.
+   - Panel (lo usa el club): servicio compose **`web`**, puerto **80**. Ej. `ezmatch.<sub>.easypanel.host`.
 6. Deploy.
 
 ## 3. Verificar

@@ -36,6 +36,17 @@ services:
       postgres:
         condition: service_healthy
 
+  # Panel web (nginx): sirve el frontend y proxea /api a la API. En Easypanel, el dominio del panel apunta acá (puerto 80).
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    expose:
+      - "80"
+    depends_on:
+      - api
+
   postgres:
     image: postgres:17
     restart: unless-stopped
