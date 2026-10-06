@@ -6,6 +6,7 @@ import AgendaPage from './features/agenda/AgendaPage'
 import AccountPage from './features/account/AccountPage'
 import ConfigPage from './features/config/ConfigPage'
 import CustomersPage from './features/customers/CustomersPage'
+import ClubsPage from './features/admin/ClubsPage'
 
 export default function App() {
   return (
@@ -19,6 +20,9 @@ export default function App() {
             <Route path="cuenta" element={<AccountPage />} />
             <Route element={<RequireRole roles={['Owner', 'SuperAdmin']} />}>
               <Route path="configuracion" element={<ConfigPage />} />
+            </Route>
+            <Route element={<RequireRole roles={['SuperAdmin']} />}>
+              <Route path="admin/clubes" element={<ClubsPage />} />
             </Route>
           </Route>
         </Route>

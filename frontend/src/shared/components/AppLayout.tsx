@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { CalendarDays, LogOut, Settings, UserRound, Users } from 'lucide-react'
+import { Building2, CalendarDays, LogOut, Settings, UserRound, Users } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useActiveClub, useAuthStore } from '../../features/auth/authStore'
 import { roleLabel } from '../../features/auth/types'
@@ -20,6 +20,7 @@ const allNavItems: NavItem[] = [
   { to: '/clientes', label: 'Clientes', icon: Users },
   { to: '/configuracion', label: 'Configuración', icon: Settings, roles: ['Owner', 'SuperAdmin'] },
   { to: '/cuenta', label: 'Mi cuenta', icon: UserRound },
+  { to: '/admin/clubes', label: 'Clubes', icon: Building2, roles: ['SuperAdmin'] },
 ]
 
 export function AppLayout() {

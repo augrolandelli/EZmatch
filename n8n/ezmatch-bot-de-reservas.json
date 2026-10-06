@@ -11,7 +11,7 @@
         0
       ],
       "parameters": {
-        "content": "## EZmatch - Bot de reservas\n\nAtiende el WhatsApp de un club (via Chatwoot) y reserva turnos contra la API de EZmatch. La API es la unica fuente de verdad: el bot nunca decide disponibilidad ni precios.\n\n**1. Nodo `config`**\n- `chatwoot_url`, `account_id`: tu Chatwoot.\n- `api_url`: URL publica de EZmatchApi (Easypanel).\n- `nombre_asistente`: opcional (vacio = \"el asistente de reservas\").\n\n**2. Credenciales**\n- `EZmatch Bot Key` (Header Auth X-Bot-Key) = BOT_API_KEY de la API.\n- `chatwoot` y `OpenAI account`: las mismas de la concesionaria.\n\n**3. Chatwoot**: webhook de cuenta, evento Mensaje creado -> `entrada_chatwoot` (path `chatwoot-demo-concesionaria`, compartido con la muni y la concesionaria: solo uno de los tres puede estar activo a la vez).\nEl club se resuelve por inbox (`Club.ChatwootInboxId`). Inboxes sin club se ignoran.\n\n**4. Etiquetas que callan al bot**: pide-humano, bot-pausado. Sacar la etiqueta = el bot vuelve a responder.\n\n**Herramientas**: el telefono y el inbox los pone el flujo, nunca la IA: un cliente solo puede ver y cancelar sus propias reservas.",
+        "content": "## EZmatch - Bot de reservas\n\nAtiende el WhatsApp de un club (via Chatwoot) y reserva turnos contra la API de EZmatch. La API es la unica fuente de verdad: el bot nunca decide disponibilidad ni precios.\n\n**1. Nodo `config`**\n- `chatwoot_url`: tu Chatwoot. `account_id` es solo un respaldo: el bot responde en la cuenta de donde vino cada mensaje (una cuenta por club).\n- `api_url`: URL publica de EZmatchApi (Easypanel).\n- `nombre_asistente`: opcional (vacio = \"el asistente de reservas\").\n\n**2. Credenciales**\n- `EZmatch Bot Key` (Header Auth X-Bot-Key) = BOT_API_KEY de la API.\n- `chatwoot` y `OpenAI account`: las mismas de la concesionaria.\n\n**3. Chatwoot**: webhook de cuenta, evento Mensaje creado -> `entrada_chatwoot` (path `chatwoot-demo-concesionaria`, compartido con la muni y la concesionaria: solo uno de los tres puede estar activo a la vez).\nEl club se resuelve por inbox (`Club.ChatwootInboxId`). Inboxes sin club se ignoran.\n\n**4. Etiquetas que callan al bot**: pide-humano, bot-pausado. Sacar la etiqueta = el bot vuelve a responder.\n\n**Herramientas**: el telefono y el inbox los pone el flujo, nunca la IA: un cliente solo puede ver y cancelar sus propias reservas.",
         "height": 620,
         "width": 460,
         "color": 3
@@ -102,7 +102,7 @@
         400
       ],
       "parameters": {
-        "jsCode": "// Webhook de cuenta de Chatwoot: evento \"message_created\" (Ajustes > Integraciones > Webhooks).\nconst cfg = $('config').first().json;\nconst faltan = [];\nif (!cfg.chatwoot_url) faltan.push('chatwoot_url');\nif (!Number(cfg.account_id)) faltan.push('account_id');\nif (!cfg.api_url || /COMPLETAR/.test(cfg.api_url)) faltan.push('api_url');\nif (faltan.length) throw new Error('Completar en el nodo config: ' + faltan.join(', '));\n\nconst b = $('entrada_chatwoot').first().json.body || {};\n// Solo mensajes del cliente: se ignoran otros eventos, los salientes (incluidas las respuestas del propio bot) y las notas privadas\nif (b.event !== 'message_created') return [];\nif (!['incoming', 0, '0'].includes(b.message_type) || b.private) return [];\n\nconst conv = b.conversation || {};\nconst conversationId = String(conv.id || '').trim();\nif (!/^\\d+$/.test(conversationId)) return [];\nconst inboxId = Number((b.inbox && b.inbox.id) || conv.inbox_id || 0);\nif (!inboxId) return [];\n\nconst sender = b.sender || (conv.meta && conv.meta.sender) || {};\nconst labels = Array.isArray(conv.labels) ? conv.labels : [];\n// Inboxes sin telefono (web/API, solo para pruebas): id estable con un codigo de pais inexistente (+99)\nconst telefono = String(sender.phone_number || '').trim() || ('+99' + String(Number(sender.id) || 0).padStart(8, '0'));\n\nconst adjuntos = Array.isArray(b.attachments) ? b.attachments : [];\nconst tipos = adjuntos.map(a => a.file_type);\nconst contacto = adjuntos.find(a => a.file_type === 'contact');\nconst adjunto = tipos.includes('image') ? '[FOTO]'\n  : tipos.includes('audio') ? '[AUDIO]'\n  : contacto ? '[CONTACTO COMPARTIDO' + (contacto.fallback_title ? ': ' + contacto.fallback_title : '') + ']'\n  : tipos.includes('location') ? '[UBICACION]'\n  : tipos.includes('video') ? '[VIDEO]'\n  : adjuntos.length ? '[ARCHIVO]' : '';\n// El bot se calla cuando la conversacion paso a un humano o alguien lo pauso a mano\nconst etiquetasStop = [cfg.etiqueta_pide_humano, cfg.etiqueta_bot_pausado];\n\nreturn [{ json: {\n  conversation_id: conversationId,\n  inbox_id: inboxId,\n  contact_id: Number(sender.id) || 0,\n  nombre: String(sender.name || '').trim(),\n  telefono,\n  labels,\n  bot_activo: !labels.some(l => etiquetasStop.includes(l)),\n  audio_url: String((adjuntos.find(a => a.file_type === 'audio') || {}).data_url || ''),\n  msg: { id: String(b.id || $execution.id), texto: [String(b.content || '').trim(), adjunto].filter(Boolean).join(' '), ts: Date.now() },\n} }];"
+        "jsCode": "// Webhook de cuenta de Chatwoot: evento \"message_created\" (Ajustes > Integraciones > Webhooks).\nconst cfg = $('config').first().json;\nconst faltan = [];\nif (!cfg.chatwoot_url) faltan.push('chatwoot_url');\nif (!Number(cfg.account_id)) faltan.push('account_id');\nif (!cfg.api_url || /COMPLETAR/.test(cfg.api_url)) faltan.push('api_url');\nif (faltan.length) throw new Error('Completar en el nodo config: ' + faltan.join(', '));\n\nconst b = $('entrada_chatwoot').first().json.body || {};\n// Solo mensajes del cliente: se ignoran otros eventos, los salientes (incluidas las respuestas del propio bot) y las notas privadas\nif (b.event !== 'message_created') return [];\nif (!['incoming', 0, '0'].includes(b.message_type) || b.private) return [];\n\nconst conv = b.conversation || {};\nconst conversationId = String(conv.id || '').trim();\nif (!/^\\d+$/.test(conversationId)) return [];\nconst inboxId = Number((b.inbox && b.inbox.id) || conv.inbox_id || 0);\nif (!inboxId) return [];\n\nconst sender = b.sender || (conv.meta && conv.meta.sender) || {};\nconst labels = Array.isArray(conv.labels) ? conv.labels : [];\n// Inboxes sin telefono (web/API, solo para pruebas): id estable con un codigo de pais inexistente (+99)\nconst telefono = String(sender.phone_number || '').trim() || ('+99' + String(Number(sender.id) || 0).padStart(8, '0'));\n\nconst adjuntos = Array.isArray(b.attachments) ? b.attachments : [];\nconst tipos = adjuntos.map(a => a.file_type);\nconst contacto = adjuntos.find(a => a.file_type === 'contact');\nconst adjunto = tipos.includes('image') ? '[FOTO]'\n  : tipos.includes('audio') ? '[AUDIO]'\n  : contacto ? '[CONTACTO COMPARTIDO' + (contacto.fallback_title ? ': ' + contacto.fallback_title : '') + ']'\n  : tipos.includes('location') ? '[UBICACION]'\n  : tipos.includes('video') ? '[VIDEO]'\n  : adjuntos.length ? '[ARCHIVO]' : '';\n// El bot se calla cuando la conversacion paso a un humano o alguien lo pauso a mano\nconst etiquetasStop = [cfg.etiqueta_pide_humano, cfg.etiqueta_bot_pausado];\n\nreturn [{ json: {\n  conversation_id: conversationId,\n  inbox_id: inboxId,\n  // Cuenta de Chatwoot del mensaje: cada club tiene la suya y se responde ahí.\n  account_id: Number((b.account && b.account.id) || 0) || Number(cfg.account_id),\n  contact_id: Number(sender.id) || 0,\n  nombre: String(sender.name || '').trim(),\n  telefono,\n  labels,\n  bot_activo: !labels.some(l => etiquetasStop.includes(l)),\n  audio_url: String((adjuntos.find(a => a.file_type === 'audio') || {}).data_url || ''),\n  msg: { id: String(b.id || $execution.id), texto: [String(b.content || '').trim(), adjunto].filter(Boolean).join(' '), ts: Date.now() },\n} }];"
       }
     },
     {
@@ -830,7 +830,7 @@
       "waitBetweenTries": 2000,
       "parameters": {
         "method": "POST",
-        "url": "={{ $('config').first().json.chatwoot_url.replace(/\\/+$/, '') }}/api/v1/accounts/{{ $('config').first().json.account_id }}/conversations/{{ $json.conversation_id }}/messages",
+        "url": "={{ $('config').first().json.chatwoot_url.replace(/\\/+$/, '') }}/api/v1/accounts/{{ $('normalizar_entrada').first().json.account_id }}/conversations/{{ $json.conversation_id }}/messages",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
@@ -898,7 +898,7 @@
       },
       "parameters": {
         "method": "POST",
-        "url": "={{ $('config').first().json.chatwoot_url.replace(/\\/+$/, '') }}/api/v1/accounts/{{ $('config').first().json.account_id }}/conversations/{{ $('salida').first().json.conversation_id }}/messages",
+        "url": "={{ $('config').first().json.chatwoot_url.replace(/\\/+$/, '') }}/api/v1/accounts/{{ $('normalizar_entrada').first().json.account_id }}/conversations/{{ $('salida').first().json.conversation_id }}/messages",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
@@ -927,7 +927,7 @@
       },
       "parameters": {
         "method": "POST",
-        "url": "={{ $('config').first().json.chatwoot_url.replace(/\\/+$/, '') }}/api/v1/accounts/{{ $('config').first().json.account_id }}/conversations/{{ $('salida').first().json.conversation_id }}/labels",
+        "url": "={{ $('config').first().json.chatwoot_url.replace(/\\/+$/, '') }}/api/v1/accounts/{{ $('normalizar_entrada').first().json.account_id }}/conversations/{{ $('salida').first().json.conversation_id }}/labels",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
@@ -953,7 +953,7 @@
       },
       "parameters": {
         "method": "POST",
-        "url": "={{ $('config').first().json.chatwoot_url.replace(/\\/+$/, '') }}/api/v1/accounts/{{ $('config').first().json.account_id }}/conversations/{{ $('salida').first().json.conversation_id }}/toggle_status",
+        "url": "={{ $('config').first().json.chatwoot_url.replace(/\\/+$/, '') }}/api/v1/accounts/{{ $('normalizar_entrada').first().json.account_id }}/conversations/{{ $('salida').first().json.conversation_id }}/toggle_status",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,

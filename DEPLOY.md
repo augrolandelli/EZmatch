@@ -59,6 +59,10 @@ curl -H "X-Bot-Key: <BOT_API_KEY>" "https://<dominio-api>/api/bot/context?inboxI
 
 - **El id del inbox** se ve en Chatwoot → Settings → Inboxes → (inbox) → la URL termina en `/inboxes/<id>`.
 - Cambiar `SEED_CHATWOOT_INBOX_ID` y redeployar vuelve a vincular el club demo a otro inbox.
-- Cuando haya clubes reales (Fase 3, panel), poner `SEED_DEMO_CLUB=false`.
+- **Apagar el seed cuando haya clubes reales:** `SEED_DEMO_CLUB=false` y vaciar `SEED_CHATWOOT_INBOX_ID`,
+  `SEED_DEMO_OWNER_EMAIL` y `SEED_DEMO_OWNER_PASSWORD`. Mientras está prendido, en cada arranque vuelve a
+  vincular el inbox al club demo (si ese inbox ya es de otro club, solo avisa en el log).
+- **Clubes nuevos:** se dan de alta desde el panel (menú Clubes, solo SuperAdmin), con su dueño y su inbox
+  de Chatwoot. El bot responde en la cuenta de Chatwoot de donde vino cada mensaje (una cuenta por club).
 - **Backups**: el volumen `postgres-data` guarda la base. Programar un `pg_dump` diario
   (Easypanel → servicio postgres → Backups, o un cron en el VPS).
