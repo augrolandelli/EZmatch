@@ -100,6 +100,7 @@ builder.Services.AddScoped<IPanelBookingService, PanelBookingService>();
 builder.Services.AddScoped<IClubConfigService, ClubConfigService>();
 builder.Services.AddScoped<ICustomerService, CustomerService>();
 builder.Services.AddScoped<IClubUserService, ClubUserService>();
+builder.Services.AddScoped<IAdminClubService, AdminClubService>();
 
 builder.Services.AddRateLimiter(options =>
 {

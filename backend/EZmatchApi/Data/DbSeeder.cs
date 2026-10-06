@@ -21,6 +21,15 @@ public static class DbSeeder
         {
             if (chatwootInboxId is not null)
             {
+                // Si el inbox ya es de otro club (se lo pasaste desde el admin), no se pisa: avisar y seguir.
+                if (await db.Clubs.AnyAsync(c => c.ChatwootInboxId == chatwootInboxId && c.Slug != DemoSlug))
+                {
+                    logger.LogWarning(
+                        "Seed: el inbox {InboxId} ya pertenece a otro club; no se vincula al club demo. Apagá el seed (SEED_DEMO_CLUB=false).",
+                        chatwootInboxId);
+                    return;
+                }
+
                 var updated = await db.Clubs
                     .Where(c => c.Slug == DemoSlug && c.ChatwootInboxId != chatwootInboxId)
                     .ExecuteUpdateAsync(s => s.SetProperty(c => c.ChatwootInboxId, chatwootInboxId));
