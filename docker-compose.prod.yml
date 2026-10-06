@@ -16,8 +16,10 @@ services:
       - "5000"
     environment:
       ASPNETCORE_ENVIRONMENT: Production
+      # GSS Encryption Mode=Disable: sin esto Npgsql intenta Kerberos, la imagen no trae
+      # libgssapi_krb5 y el proceso termina con código 139.
       ASPNETCORE_URLS: http://+:5000
-      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=ezmatch;Username=ezmatch;Password=${POSTGRES_PASSWORD}"
+      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=ezmatch;Username=ezmatch;Password=${POSTGRES_PASSWORD};GSS Encryption Mode=Disable"
       Cors__AllowedOrigins__0: ${FRONTEND_URL}
       Bot__ApiKey: ${BOT_API_KEY}
       # Club demo para probar el bot antes de tener el panel (Fase 2). Desactivar con un club real.
